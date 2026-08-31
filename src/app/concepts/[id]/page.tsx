@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import RegenerateButton from "./RegenerateButton";
 import MockPurchase from "./MockPurchase";
+import ConceptImage from "./ConceptImage";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +41,8 @@ export default async function ConceptsPage({ params }: { params: { id: string } 
 
       <h1 className="font-display text-3xl">Three directions from your brief</h1>
       <p className="mt-2 text-sm text-ink-muted">
-        Each direction is a distinct interpretation of your brief. Pick the one closest to your intent, then take it to your artist —
-        or unlock the Concept Pack for high-res downloads and the artist-ready PDF.
+        Each direction is a distinct interpretation of your brief. Preview them here — pick your favourite and unlock the
+        Concept Pack for downloadable high-res files and the artist-ready PDF.
       </p>
       <p className="mt-1 text-xs text-ink-muted/70">
         Demo mode: concept visuals below are generated composition placeholders. AI concept rendering is wired and unlocks once an image key is added.
@@ -53,17 +54,12 @@ export default async function ConceptsPage({ params }: { params: { id: string } 
             <div className="pill">Direction {c.idx + 1}</div>
             <div className="mt-4 aspect-square overflow-hidden rounded-xl border border-ink-ring bg-ink-edge">
               {c.image_url ? (
-                paid ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={c.image_url} alt={`Direction ${c.idx + 1}`} className="h-full w-full object-cover" />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={c.image_url}
-                    alt={`Direction ${c.idx + 1}`}
-                    className="h-full w-full object-cover blur-sm brightness-75"
-                  />
-                )
+                <ConceptImage
+                  src={c.image_url}
+                  alt={`Direction ${c.idx + 1}`}
+                  paid={paid}
+                  index={c.idx}
+                />
               ) : (
                 <div className="flex h-full items-center justify-center text-xs text-ink-muted">
                   Image pending — check back in a moment.
@@ -78,11 +74,14 @@ export default async function ConceptsPage({ params }: { params: { id: string } 
       {!paid && (
         <div className="card mt-10">
           <div className="pill border-accent/60 text-accent">Concept Pack — A$19</div>
-          <h2 className="mt-3 font-display text-2xl">Unlock high-res & the artist-ready PDF</h2>
+          <h2 className="mt-3 font-display text-2xl">Take your concepts with you</h2>
+          <p className="mt-2 text-sm text-ink-muted">
+            Preview is free. Unlock the pack to keep the artwork and take it to your artist.
+          </p>
           <ul className="mt-3 space-y-1 text-sm text-ink-muted">
-            <li>Full-resolution concept images without blur</li>
-            <li>Downloadable PDF brief with references</li>
-            <li>Regenerate as many times as you like</li>
+            <li>Downloadable full-resolution concept images (watermark-free)</li>
+            <li>Artist-ready PDF brief with placement and references</li>
+            <li>Unlimited regenerations on this brief</li>
           </ul>
           <MockPurchase briefId={brief.id} />
         </div>
