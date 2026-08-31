@@ -89,15 +89,15 @@ export default function LoginForm() {
               inputMode="numeric"
               pattern="[0-9]*"
               autoComplete="one-time-code"
-              maxLength={6}
+              maxLength={10}
               required
-              placeholder="123456"
-              className="input text-center text-2xl tracking-[0.5em]"
+              placeholder="Enter code"
+              className="input text-center text-2xl tracking-[0.3em]"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
               autoFocus
             />
-            <button className="btn-primary w-full" disabled={state === "working" || code.length !== 6}>
+            <button className="btn-primary w-full" disabled={state === "working" || code.length < 6}>
               {state === "working" ? "Verifying…" : "Continue"}
             </button>
             <button
