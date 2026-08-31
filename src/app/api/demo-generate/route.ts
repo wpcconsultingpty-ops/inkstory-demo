@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildPrompt } from "@/lib/brief";
-import { buildTattooPrompt, generateTattooImage } from "@/lib/openai-image";
+import { buildTattooPrompt, generateTattooImageSeries } from "@/lib/openai-image";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const STYLE_VARIANTS = [
   { label: "Considered & minimal", detail: "generous negative space, single focal element, quiet composition" },
@@ -51,38 +51,45 @@ export async function POST(req: Request) {
   const supaAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const supa = supaUrl && supaAnon ? createClient(supaUrl, supaAnon) : null;
 
-  const jobs = STYLE_VARIANTS.map(async (variant, i) => {
-    const prompt = buildTattooPrompt(basePrompt, variant, i);
-    const gen = await generateTattooImage(prompt, { size: "1024x1024", quality: "medium" });
+  const prompts = STYLE_VARIANTS.map((variant, i) => buildTattooPrompt(basePrompt, variant, i));
 
-    let image_url: string | null = null;
-    let meta: Record<string, unknown> = { variant: variant.label, detail: variant.detail };
-
-    if (gen && supa) {
-      const buf = Buffer.from(gen.b64, "base64");
-      const path = `demo/${briefId}/direction-${i + 1}.png`;
-      const { error } = await supa.storage.from("concepts").upload(path, buf, {
-        contentType: "image/png",
-        upsert: true
-      });
-      if (!error) {
-        const { data } = supa.storage.from("concepts").getPublicUrl(path);
-        image_url = data?.publicUrl ?? null;
-        meta.model = gen.model;
-      }
-    }
-
-    if (!image_url && gen) {
-      // Storage upload failed — inline the b64 as a fallback so the demo still shows real art.
-      image_url = `data:image/png;base64,${gen.b64}`;
-      meta.model = gen.model;
-      meta.upload_failed = true;
-    }
-
-    return { idx: i, prompt, image_url, meta };
+  // Generate sequentially to stay under OpenAI's per-minute image rate limit.
+  const gens = await generateTattooImageSeries(prompts, {
+    size: "1024x1024",
+    quality: "low",
+    staggerMs: 2000
   });
 
-  const results = await Promise.all(jobs);
+  const results = await Promise.all(
+    STYLE_VARIANTS.map(async (variant, i) => {
+      const prompt = prompts[i];
+      const gen = gens[i];
+      let image_url: string | null = null;
+      let meta: Record<string, unknown> = { variant: variant.label, detail: variant.detail };
+
+      if (gen && supa) {
+        const buf = Buffer.from(gen.b64, "base64");
+        const path = `demo/${briefId}/direction-${i + 1}.png`;
+        const { error } = await supa.storage.from("concepts").upload(path, buf, {
+          contentType: "image/png",
+          upsert: true
+        });
+        if (!error) {
+          const { data } = supa.storage.from("concepts").getPublicUrl(path);
+          image_url = data?.publicUrl ?? null;
+          meta.model = gen.model;
+        }
+      }
+
+      if (!image_url && gen) {
+        image_url = `data:image/png;base64,${gen.b64}`;
+        meta.model = gen.model;
+        meta.upload_failed = true;
+      }
+
+      return { idx: i, prompt, image_url, meta };
+    })
+  );
 
   // If EVERY generation failed, tell the caller so demo falls back to SVG.
   const anySucceeded = results.some((r) => r.image_url);

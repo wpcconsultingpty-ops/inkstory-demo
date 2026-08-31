@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { buildPrompt } from "@/lib/brief";
-import { buildTattooPrompt, generateTattooImage } from "@/lib/openai-image";
+import { buildTattooPrompt, generateTattooImageSeries } from "@/lib/openai-image";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// Hobby-plan cap is 60s. Sequential generation with delays needs longer, so use
+// 60s max and let images that don't finish come back as SVG placeholders (rare).
+export const maxDuration = 60;
 
 const STYLE_VARIANTS = [
   {
@@ -93,36 +95,42 @@ export async function POST(req: Request) {
   await supa.from("concepts").delete().eq("brief_id", brief_id);
 
   const basePrompt = buildPrompt(brief as any);
+  const prompts = STYLE_VARIANTS.map((variant, i) => buildTattooPrompt(basePrompt, variant, i));
 
-  // Generate all three in parallel to keep latency down.
-  const jobs = STYLE_VARIANTS.map(async (variant, i) => {
-    const prompt = buildTattooPrompt(basePrompt, variant, i);
-    const gen = await generateTattooImage(prompt, { size: "1024x1024", quality: "medium" });
-
-    let image_url: string;
-    let meta: Record<string, unknown> = { variant: variant.label, detail: variant.detail };
-
-    if (gen) {
-      const uploaded = await uploadImage(supa, user.id, brief_id, i, gen.b64);
-      if (uploaded) {
-        image_url = uploaded;
-        meta.model = gen.model;
-        meta.size = gen.size;
-      } else {
-        // Upload failed — inline data URL fallback (still a real image, just larger payload).
-        image_url = `data:image/png;base64,${gen.b64}`;
-        meta.model = gen.model;
-        meta.upload_failed = true;
-      }
-    } else {
-      image_url = conceptSVG(i, brief);
-      meta.placeholder = true;
-    }
-
-    return { i, prompt, image_url, meta };
+  // Generate sequentially with a short delay between requests to stay under
+  // OpenAI's per-minute image rate limit.
+  const gens = await generateTattooImageSeries(prompts, {
+    size: "1024x1024",
+    quality: "low",
+    staggerMs: 2000
   });
 
-  const results = await Promise.all(jobs);
+  const results = await Promise.all(
+    STYLE_VARIANTS.map(async (variant, i) => {
+      const prompt = prompts[i];
+      const gen = gens[i];
+      let image_url: string;
+      let meta: Record<string, unknown> = { variant: variant.label, detail: variant.detail };
+
+      if (gen) {
+        const uploaded = await uploadImage(supa, user.id, brief_id, i, gen.b64);
+        if (uploaded) {
+          image_url = uploaded;
+          meta.model = gen.model;
+          meta.size = gen.size;
+        } else {
+          image_url = `data:image/png;base64,${gen.b64}`;
+          meta.model = gen.model;
+          meta.upload_failed = true;
+        }
+      } else {
+        image_url = conceptSVG(i, brief);
+        meta.placeholder = true;
+      }
+
+      return { i, prompt, image_url, meta };
+    })
+  );
   const rows = results
     .sort((a, b) => a.i - b.i)
     .map((r) => ({
