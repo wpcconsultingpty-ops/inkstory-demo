@@ -12,6 +12,8 @@ export default function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"otp" | "password">("otp");
   const [stage, setStage] = useState<"email" | "code">("email");
   const [state, setState] = useState<"idle" | "working" | "error">("idle");
   const [msg, setMsg] = useState("");
@@ -53,6 +55,21 @@ export default function LoginForm() {
     }
   }
 
+  async function signInWithPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setState("working");
+    setMsg("");
+    const supabase = createSupabaseBrowserClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setState("error");
+      setMsg(error.message);
+    } else {
+      router.push(next);
+      router.refresh();
+    }
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
       <Link href="/" className="mb-8 text-sm text-ink-muted hover:text-white">← Back</Link>
@@ -69,22 +86,73 @@ export default function LoginForm() {
         <>
           <h1 className="font-display text-3xl">Sign in</h1>
           <p className="mt-2 text-sm text-ink-muted">
-            Enter your email and we&apos;ll send you a one-time code.
+            {mode === "otp"
+              ? "Enter your email and we’ll send you a one-time code."
+              : "Sign in with your email and password."}
           </p>
-          <form onSubmit={sendCode} className="mt-8 space-y-3">
-            <input
-              type="email"
-              required
-              placeholder="you@example.com"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoFocus
-            />
-            <button className="btn-primary w-full" disabled={state === "working"}>
-              {state === "working" ? "Sending code…" : "Email me a code"}
-            </button>
-          </form>
+          {mode === "otp" ? (
+            <form onSubmit={sendCode} className="mt-8 space-y-3">
+              <input
+                type="email"
+                required
+                placeholder="you@example.com"
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoFocus
+              />
+              <button className="btn-primary w-full" disabled={state === "working"}>
+                {state === "working" ? "Sending code…" : "Email me a code"}
+              </button>
+              <button
+                type="button"
+                className="w-full text-xs text-ink-muted hover:text-white"
+                onClick={() => {
+                  setMode("password");
+                  setMsg("");
+                  setState("idle");
+                }}
+              >
+                Use a password instead
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={signInWithPassword} className="mt-8 space-y-3">
+              <input
+                type="email"
+                required
+                placeholder="you@example.com"
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoFocus
+                autoComplete="email"
+              />
+              <input
+                type="password"
+                required
+                placeholder="Password"
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+              <button className="btn-primary w-full" disabled={state === "working"}>
+                {state === "working" ? "Signing in…" : "Sign in"}
+              </button>
+              <button
+                type="button"
+                className="w-full text-xs text-ink-muted hover:text-white"
+                onClick={() => {
+                  setMode("otp");
+                  setMsg("");
+                  setState("idle");
+                }}
+              >
+                Email me a code instead
+              </button>
+            </form>
+          )}
         </>
       ) : (
         <>
