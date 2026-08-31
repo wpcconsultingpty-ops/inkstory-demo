@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { buildPrompt } from "@/lib/brief";
+import { buildTattooPrompt, generateTattooImage } from "@/lib/openai-image";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const STYLE_VARIANTS = [
   {
@@ -20,9 +21,7 @@ const STYLE_VARIANTS = [
   }
 ];
 
-// Renders a tasteful SVG "concept card" placeholder specific to each direction.
-// This runs in-node, no external calls. Real AI image generation swaps in later
-// by pointing image_url at the model output instead of this SVG data URL.
+// SVG placeholder used only when the image API is unavailable.
 function conceptSVG(idx: number, brief: any): string {
   const palette = [
     { bg: "#0e0e12", ink: "#f3ead8", accent: "#c9a26b" },
@@ -31,7 +30,6 @@ function conceptSVG(idx: number, brief: any): string {
   ][idx % 3];
   const variant = STYLE_VARIANTS[idx % 3];
 
-  // Deterministic hash from brief for subtle per-brief variation.
   const seed = String((brief?.meaning || "") + (brief?.style || "") + idx)
     .split("")
     .reduce((a: number, c: string) => (a * 31 + c.charCodeAt(0)) | 0, 7);
@@ -53,34 +51,30 @@ function conceptSVG(idx: number, brief: any): string {
     return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(2 + r(i) * 2).toFixed(1)}" fill="${palette.accent}" opacity="0.6"/>`;
   }).join("");
 
-  const arcs = Array.from({ length: 3 }, (_, i) => {
-    const rad = 200 + i * 40;
-    return `<path d="M ${512 - rad},512 A ${rad},${rad} 0 0 1 ${512 + rad},512" fill="none" stroke="${palette.ink}" stroke-opacity="${0.12 + i * 0.05}" stroke-width="1"/>`;
-  }).join("");
-
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-    <defs>
-      <radialGradient id="g" cx="50%" cy="42%" r="70%">
-        <stop offset="0%" stop-color="${palette.bg}" stop-opacity="1"/>
-        <stop offset="100%" stop-color="#000" stop-opacity="1"/>
-      </radialGradient>
-    </defs>
+    <defs><radialGradient id="g" cx="50%" cy="42%" r="70%"><stop offset="0%" stop-color="${palette.bg}"/><stop offset="100%" stop-color="#000"/></radialGradient></defs>
     <rect width="1024" height="1024" fill="url(#g)"/>
     ${rings}
-    ${arcs}
     ${runes}
     <text x="512" y="928" text-anchor="middle" font-family="Georgia, serif" font-size="30" fill="${palette.ink}" opacity="0.85">Direction ${idx + 1} · ${variant.label}</text>
-    <text x="512" y="972" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="18" fill="${palette.ink}" opacity="0.45">${escape(brief?.style || "InkStory concept")}</text>
   </svg>`;
 
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-function escape(s: string) {
-  return String(s || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+async function uploadImage(supa: any, userId: string, briefId: string, idx: number, b64: string): Promise<string | null> {
+  const buf = Buffer.from(b64, "base64");
+  const path = `${userId}/${briefId}/direction-${idx + 1}.png`;
+  const { error } = await supa.storage.from("concepts").upload(path, buf, {
+    contentType: "image/png",
+    upsert: true
+  });
+  if (error) {
+    console.error("[storage upload]", error.message);
+    return null;
+  }
+  const { data } = supa.storage.from("concepts").getPublicUrl(path);
+  return data?.publicUrl ?? null;
 }
 
 export async function POST(req: Request) {
@@ -98,28 +92,51 @@ export async function POST(req: Request) {
 
   await supa.from("concepts").delete().eq("brief_id", brief_id);
 
-  const concepts: any[] = [];
-  for (let i = 0; i < 3; i++) {
-    const variant = STYLE_VARIANTS[i];
-    const prompt = `${buildPrompt(brief as any)} Direction ${i + 1}: ${variant.detail}.`;
-    const image_url = conceptSVG(i, brief);
+  const basePrompt = buildPrompt(brief as any);
 
-    const { data: inserted } = await supa
-      .from("concepts")
-      .insert({
-        brief_id,
-        user_id: user.id,
-        idx: i,
-        prompt,
-        image_url,
-        meta: { variant: variant.label, detail: variant.detail, placeholder: true }
-      })
-      .select("*")
-      .single();
-    concepts.push(inserted);
-  }
+  // Generate all three in parallel to keep latency down.
+  const jobs = STYLE_VARIANTS.map(async (variant, i) => {
+    const prompt = buildTattooPrompt(basePrompt, variant, i);
+    const gen = await generateTattooImage(prompt, { size: "1024x1024", quality: "medium" });
+
+    let image_url: string;
+    let meta: Record<string, unknown> = { variant: variant.label, detail: variant.detail };
+
+    if (gen) {
+      const uploaded = await uploadImage(supa, user.id, brief_id, i, gen.b64);
+      if (uploaded) {
+        image_url = uploaded;
+        meta.model = gen.model;
+        meta.size = gen.size;
+      } else {
+        // Upload failed — inline data URL fallback (still a real image, just larger payload).
+        image_url = `data:image/png;base64,${gen.b64}`;
+        meta.model = gen.model;
+        meta.upload_failed = true;
+      }
+    } else {
+      image_url = conceptSVG(i, brief);
+      meta.placeholder = true;
+    }
+
+    return { i, prompt, image_url, meta };
+  });
+
+  const results = await Promise.all(jobs);
+  const rows = results
+    .sort((a, b) => a.i - b.i)
+    .map((r) => ({
+      brief_id,
+      user_id: user.id,
+      idx: r.i,
+      prompt: r.prompt,
+      image_url: r.image_url,
+      meta: r.meta
+    }));
+
+  const { data: inserted } = await supa.from("concepts").insert(rows).select("*");
 
   await supa.from("briefs").update({ status: "concepts_ready" }).eq("id", brief_id);
 
-  return NextResponse.json({ ok: true, concepts });
+  return NextResponse.json({ ok: true, concepts: inserted });
 }

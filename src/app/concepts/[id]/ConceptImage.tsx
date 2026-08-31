@@ -8,14 +8,32 @@ type Props = {
 };
 
 export default function ConceptImage({ src, alt, paid, index }: Props) {
-  function download() {
-    // Only used when paid — trigger a download of the SVG data URL.
+  async function download() {
+    // Only used when paid. Detect format from src to pick the right extension.
+    // For remote URLs, fetch as blob so cross-origin downloads work; for data URLs, use direct link.
+    let ext = "png";
+    if (src.startsWith("data:image/svg")) ext = "svg";
+    else if (src.startsWith("data:image/png")) ext = "png";
+    else if (src.includes(".svg")) ext = "svg";
+
+    let href = src;
+    if (!src.startsWith("data:")) {
+      try {
+        const res = await fetch(src);
+        const blob = await res.blob();
+        href = URL.createObjectURL(blob);
+      } catch {
+        // fall back to direct link
+      }
+    }
+
     const a = document.createElement("a");
-    a.href = src;
-    a.download = `inkstory-direction-${index + 1}.svg`;
+    a.href = href;
+    a.download = `inkstory-direction-${index + 1}.${ext}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    if (href !== src) URL.revokeObjectURL(href);
   }
 
   return (

@@ -18,7 +18,7 @@ export default function RegenerateButton({ briefId }: { briefId: string }) {
   }
   return (
     <button className="btn-ghost" onClick={go} disabled={busy}>
-      {busy ? "Generating…" : "Regenerate concepts"}
+      {busy ? "Generating images… (~30s)" : "Regenerate concepts"}
     </button>
   );
 }

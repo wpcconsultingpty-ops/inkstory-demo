@@ -5,6 +5,7 @@ import Link from "next/link";
 import ConceptImage from "@/app/concepts/[id]/ConceptImage";
 import {
   generateDemoConcepts,
+  generateDemoImagesRemote,
   getDemoBrief,
   getDemoConcepts,
   markDemoBriefPurchased,
@@ -17,10 +18,22 @@ export default function DemoConceptsView({ briefId }: { briefId: string }) {
   const [brief, setBrief] = useState<DemoBrief | null>(null);
   const [concepts, setConcepts] = useState<DemoConcept[]>([]);
   const [busy, setBusy] = useState(false);
+  const [imageStatus, setImageStatus] = useState<"idle" | "generating" | "ready" | "unavailable">("idle");
 
   function refresh() {
     setBrief(getDemoBrief(briefId));
     setConcepts(getDemoConcepts(briefId));
+  }
+
+  async function fetchRealImages() {
+    setImageStatus("generating");
+    const updated = await generateDemoImagesRemote(briefId);
+    if (updated && updated.some((c) => !c.meta?.placeholder)) {
+      refresh();
+      setImageStatus("ready");
+    } else {
+      setImageStatus("unavailable");
+    }
   }
 
   useEffect(() => {
@@ -30,6 +43,13 @@ export default function DemoConceptsView({ briefId }: { briefId: string }) {
     }
     refresh();
     setReady(true);
+
+    // If concepts are still placeholders, fetch real images in the background.
+    const current = getDemoConcepts(briefId);
+    const anyPlaceholder = current.some((c) => c.meta?.placeholder);
+    if (anyPlaceholder) fetchRealImages();
+    else setImageStatus("ready");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [briefId]);
 
   if (!ready) return null;
@@ -48,10 +68,11 @@ export default function DemoConceptsView({ briefId }: { briefId: string }) {
 
   const paid = brief.status === "mock_paid";
 
-  function regenerate() {
+  async function regenerate() {
     setBusy(true);
     generateDemoConcepts(briefId);
     refresh();
+    await fetchRealImages();
     setBusy(false);
   }
 
@@ -76,8 +97,19 @@ export default function DemoConceptsView({ briefId }: { briefId: string }) {
         Preview them here — pick your favourite and unlock the Concept Pack for downloadable high-res files and the
         artist-ready PDF.
       </p>
+      {imageStatus === "generating" && (
+        <p className="mt-3 flex items-center gap-2 text-sm text-accent">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
+          Generating your images now — this takes about 20–40 seconds. Placeholders show what layout each direction takes.
+        </p>
+      )}
+      {imageStatus === "unavailable" && (
+        <p className="mt-3 text-sm text-red-400">
+          Image generation is temporarily unavailable (the demo is rate-limited to 5 per hour per browser). Sign in with your email to keep generating.
+        </p>
+      )}
       <p className="mt-1 text-xs text-ink-muted/70">
-        Demo mode: nothing on this page is saved to the cloud. Clear your browser data to reset.
+        Demo mode: nothing on this page is saved to your account. Clear your browser data to reset.
       </p>
 
       <div className="mt-8 grid gap-6 md:grid-cols-3">

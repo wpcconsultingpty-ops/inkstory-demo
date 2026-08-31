@@ -24,7 +24,7 @@ export type DemoConcept = {
   idx: number;
   prompt: string;
   image_url: string;
-  meta: { variant?: string };
+  meta: { variant?: string; placeholder?: boolean; model?: string; upload_failed?: boolean };
 };
 
 type DemoStore = {
@@ -125,12 +125,12 @@ export function getDemoConcepts(briefId: string): DemoConcept[] {
     .sort((a, b) => a.idx - b.idx);
 }
 
+// Instant SVG concepts — shown immediately, replaced by real images when the API returns.
 export function generateDemoConcepts(briefId: string): DemoConcept[] {
   const store = read();
   const brief = store.briefs.find((b) => b.id === briefId);
   if (!brief) return [];
 
-  // Remove any existing concepts for this brief
   store.concepts = store.concepts.filter((c) => c.brief_id !== briefId);
 
   const variants = [
@@ -147,7 +147,7 @@ export function generateDemoConcepts(briefId: string): DemoConcept[] {
       idx: i,
       prompt: `${v.tone} — ${brief.meaning ?? ""}`,
       image_url: buildPlaceholderSvg(brief, i),
-      meta: { variant: v.label }
+      meta: { variant: v.label, placeholder: true }
     });
   }
 
@@ -155,6 +155,39 @@ export function generateDemoConcepts(briefId: string): DemoConcept[] {
   brief.updated_at = new Date().toISOString();
   write(store);
   return store.concepts.filter((c) => c.brief_id === briefId).sort((a, b) => a.idx - b.idx);
+}
+
+// Kick off real image generation via the demo API. Returns updated concepts on success,
+// null on failure (caller keeps the SVG placeholders).
+export async function generateDemoImagesRemote(briefId: string): Promise<DemoConcept[] | null> {
+  const brief = getDemoBrief(briefId);
+  if (!brief) return null;
+
+  try {
+    const res = await fetch("/api/demo-generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brief_id: briefId, brief })
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      console.warn("[demo] image API failed", res.status, errBody);
+      return null;
+    }
+    const data = await res.json();
+    if (!data?.concepts?.length) return null;
+
+    const store = read();
+    store.concepts = store.concepts.filter((c) => c.brief_id !== briefId);
+    for (const c of data.concepts as DemoConcept[]) {
+      if (c.image_url) store.concepts.push(c);
+    }
+    write(store);
+    return getDemoConcepts(briefId);
+  } catch (e) {
+    console.warn("[demo] image API error", (e as Error).message);
+    return null;
+  }
 }
 
 export function markDemoBriefPurchased(briefId: string) {
