@@ -57,6 +57,14 @@ export default function LoginForm() {
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
       <Link href="/" className="mb-8 text-sm text-ink-muted hover:text-white">← Back</Link>
 
+      <div className="mb-6 rounded-xl border border-ink-ring bg-ink-surface p-4">
+        <p className="text-sm text-white">Just want to try it?</p>
+        <p className="mt-1 text-xs text-ink-muted">
+          Skip the email and run the full flow in your browser — nothing saved to the cloud.
+        </p>
+        <Link href="/demo/brief" className="btn-ghost mt-3 inline-block">Try demo (no sign-in)</Link>
+      </div>
+
       {stage === "email" ? (
         <>
           <h1 className="font-display text-3xl">Sign in</h1>

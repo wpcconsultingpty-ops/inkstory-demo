@@ -23,7 +23,7 @@ function Nav() {
         <a href="#how" className="hover:text-white">How it works</a>
         <a href="#pricing" className="hover:text-white">Concept Pack</a>
       </nav>
-      <Link href="/brief" className="btn-primary">Start your story</Link>
+      <Link href="/demo/brief" className="btn-primary">Try the demo</Link>
     </header>
   );
 }
@@ -43,9 +43,12 @@ function Hero() {
           starts miles ahead.
         </p>
         <div className="flex flex-wrap gap-3">
-          <Link href="/brief" className="btn-primary">Start your story — free</Link>
-          <a href="#how" className="btn-ghost">See how it works</a>
+          <Link href="/demo/brief" className="btn-primary">Try the demo — no sign-in</Link>
+          <Link href="/brief" className="btn-ghost">Sign in to save your work</Link>
         </div>
+        <p className="text-xs text-ink-muted/70">
+          Demo mode runs entirely in your browser. Sign in with your email to save briefs to your account.
+        </p>
       </div>
     </section>
   );
