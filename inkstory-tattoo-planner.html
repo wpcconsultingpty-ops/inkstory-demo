@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="InkStory helps you turn personal tattoo ideas into artist-ready concept packs." />
+  <title>InkStory — Tattoo planning, with intention</title>
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=boska@400,500,700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* Art direction: InkStory → tactile, editorial tattoo-planning studio.
+       Palette: charcoal, parchment and restrained ember accent.
+       Typography: Boska display + Satoshi body — crafted, human and highly readable.
+       Density: balanced editorial, with a focused interactive planning panel. */
+    :root {
+      --text-xs: clamp(.75rem,.7rem + .25vw,.875rem);
+      --text-sm: clamp(.875rem,.8rem + .35vw,1rem);
+      --text-base: clamp(1rem,.95rem + .25vw,1.125rem);
+      --text-lg: clamp(1.125rem,1rem + .75vw,1.5rem);
+      --text-xl: clamp(1.5rem,1.2rem + 1.25vw,2.25rem);
+      --text-2xl: clamp(2rem,1.2rem + 2.5vw,3.5rem);
+      --text-3xl: clamp(2.5rem,1rem + 4vw,5rem);
+      --space-1:.25rem; --space-2:.5rem; --space-3:.75rem; --space-4:1rem; --space-5:1.25rem; --space-6:1.5rem; --space-8:2rem; --space-10:2.5rem; --space-12:3rem; --space-16:4rem; --space-20:5rem; --space-24:6rem; --space-32:8rem;
+      --radius-sm:.375rem; --radius-md:.6rem; --radius-lg:1rem; --radius-xl:1.5rem; --radius-full:999px;
+      --font-body:'Satoshi', system-ui, sans-serif; --font-display:'Boska', Georgia, serif; --font-mono:'DM Mono', monospace;
+      --content-wide:1200px; --content-default:980px;
+      --transition:180ms cubic-bezier(.16,1,.3,1);
+    }
+    [data-theme="dark"] { --bg:#121110; --surface:#191816; --surface-2:#211f1c; --offset:#292622; --text:#e9e5dc; --muted:#aaa59b; --faint:#716d65; --border:oklch(1 0 0 / .12); --accent:#d37845; --accent-hover:#ef9661; --accent-soft:#3e2920; --inverse:#191816; --shadow:0 20px 50px oklch(0 0 0 / .36); }
+    [data-theme="light"] { --bg:#f3f0e9; --surface:#faf8f3; --surface-2:#f1eee8; --offset:#e7e1d7; --text:#24211d; --muted:#68635b; --faint:#918b81; --border:oklch(.2 .01 70 / .13); --accent:#a74c26; --accent-hover:#803616; --accent-soft:#f0d8cb; --inverse:#faf8f3; --shadow:0 20px 50px oklch(.2 .01 70 / .12); }
+    *{box-sizing:border-box;margin:0;padding:0} html{scroll-behavior:smooth} body{min-height:100dvh;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:var(--text-base);line-height:1.55} button,input,textarea,select{font:inherit;color:inherit} button{cursor:pointer;border:0} a{color:inherit;text-decoration:none} img,svg{display:block;max-width:100%} :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+    .skip{position:absolute;left:-9999px}.skip:focus{left:var(--space-4);top:var(--space-4);z-index:10;background:var(--accent);color:#fff;padding:var(--space-3) var(--space-4);border-radius:var(--radius-sm)}
+    .shell{max-width:var(--content-wide);margin:auto;padding:0 var(--space-6)}
+    .nav{height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+    .brand{display:flex;align-items:center;gap:var(--space-3);font-family:var(--font-display);font-weight:700;font-size:1.5rem;letter-spacing:-.04em}.mark{width:30px;height:30px;color:var(--accent)}
+    .nav-links{display:flex;gap:var(--space-6);align-items:center;color:var(--muted);font-size:var(--text-sm)} .nav-links a:hover{color:var(--text)}
+    .nav-actions{display:flex;align-items:center;gap:var(--space-3)}
+    .icon-btn{width:42px;height:42px;border-radius:var(--radius-full);display:grid;place-items:center;background:transparent;border:1px solid var(--border)} .icon-btn:hover{background:var(--surface-2)}
+    .btn{min-height:44px;padding:0 var(--space-5);display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);border-radius:var(--radius-sm);font-weight:700;font-size:var(--text-sm);transition:transform var(--transition),background var(--transition),color var(--transition)} .btn:active{transform:translateY(1px)}
+    .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}.btn-quiet{border:1px solid var(--border);background:transparent}.btn-quiet:hover{background:var(--surface-2)}
+    .hero{padding:clamp(var(--space-12),7vw,var(--space-24)) 0 var(--space-12);display:grid;grid-template-columns:1.02fr .98fr;gap:clamp(var(--space-10),5vw,var(--space-24));align-items:center}
+    .eyebrow{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.09em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-6)}.eyebrow::before{content:"";height:1px;width:24px;background:currentColor}
+    h1,h2,h3{font-family:var(--font-display);letter-spacing:-.045em;line-height:.98}h1{font-size:var(--text-3xl);font-weight:500;max-width:12ch}h1 em{font-style:italic;color:var(--accent)}
+    .hero-copy p{color:var(--muted);margin-top:var(--space-6);max-width:52ch}.hero-ctas{display:flex;flex-wrap:wrap;gap:var(--space-3);margin-top:var(--space-8)}.micro{font-size:var(--text-xs);color:var(--faint);margin-top:var(--space-4)}
+    .planner{background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);border-radius:var(--radius-lg);padding:var(--space-3);position:relative;overflow:hidden}.planner::after{content:"";position:absolute;width:250px;height:250px;border-radius:50%;right:-140px;top:-140px;background:radial-gradient(circle,var(--accent-soft),transparent 70%);pointer-events:none}
+    .planner-top{padding:var(--space-4);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);position:relative;z-index:1}.planner-top p{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--muted)}.step{display:flex;gap:6px}.step i{display:block;width:7px;height:7px;border-radius:50%;background:var(--offset)}.step i.active{background:var(--accent)}
+    .planner-body{padding:var(--space-6) var(--space-4) var(--space-4);display:grid;grid-template-columns:1fr 1.1fr;gap:var(--space-5);position:relative;z-index:1}.question h2{font-family:var(--font-body);letter-spacing:-.02em;font-size:var(--text-lg);line-height:1.15}.question p{font-size:var(--text-sm);color:var(--muted);margin-top:var(--space-2)}
+    .choices{display:grid;gap:var(--space-2);margin-top:var(--space-5)}.choice{width:100%;padding:var(--space-3);border:1px solid var(--border);border-radius:var(--radius-sm);text-align:left;background:var(--surface-2);font-size:var(--text-sm);transition:border-color var(--transition),background var(--transition)}.choice:hover,.choice.selected{border-color:var(--accent);background:var(--accent-soft)}.choice.selected::after{content:"✓";float:right;color:var(--accent);font-weight:700}
+    .artboard{min-height:270px;background:linear-gradient(135deg,var(--offset),var(--surface-2));border-radius:calc(var(--radius-lg) - var(--space-3));position:relative;overflow:hidden;display:grid;place-items:center}.paper{width:74%;aspect-ratio:.76;background:#d9d0c2;box-shadow:0 12px 20px #0004;transform:rotate(5deg);padding:10%;position:relative;color:#24211d}.paper::before{content:"INKSTORY / CONCEPT 01";font:500 9px var(--font-mono);letter-spacing:.08em;color:#6d665d}.tree{position:absolute;left:50%;top:51%;transform:translate(-50%,-50%);width:61%;height:69%;}.tree svg{width:100%;height:100%;color:#302c27}.sticker{position:absolute;bottom:var(--space-3);right:var(--space-3);background:var(--bg);border:1px solid var(--border);padding:var(--space-2) var(--space-3);border-radius:var(--radius-full);font:500 var(--text-xs) var(--font-mono);color:var(--muted)}
+    .signal{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:var(--space-5) 0;display:flex;justify-content:space-between;gap:var(--space-6);font-size:var(--text-sm);color:var(--muted)}.signal strong{color:var(--text);font-weight:500}.signal span{white-space:nowrap}
+    .section{padding:clamp(var(--space-16),7vw,var(--space-24)) 0}.section-head{display:flex;justify-content:space-between;align-items:end;gap:var(--space-8);margin-bottom:var(--space-10)}.section-head h2{font-size:var(--text-2xl);font-weight:500;max-width:15ch}.section-head p{max-width:44ch;color:var(--muted);font-size:var(--text-sm)}
+    .process{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border)}.process article{padding:var(--space-6) var(--space-5) var(--space-6) 0;border-bottom:1px solid var(--border);margin-right:var(--space-5)}.process article:last-child{margin-right:0}.process-num{font:500 var(--text-xs) var(--font-mono);color:var(--accent)}.process h3{font-family:var(--font-body);letter-spacing:-.02em;font-size:var(--text-lg);margin:var(--space-4) 0 var(--space-2)}.process p{font-size:var(--text-sm);color:var(--muted)}
+    .featured{background:var(--surface);border-block:1px solid var(--border)}.pack{display:grid;grid-template-columns:.9fr 1.1fr;gap:var(--space-12);align-items:center}.pack-visual{position:relative;min-height:390px;background:var(--offset);border-radius:var(--radius-lg);overflow:hidden}.sheet{position:absolute;background:#dfd5c7;color:#28231d;box-shadow:0 20px 35px #0003}.sheet.one{width:56%;aspect-ratio:.72;left:10%;top:13%;transform:rotate(-7deg);padding:var(--space-5)}.sheet.two{width:56%;aspect-ratio:.72;right:9%;top:20%;transform:rotate(7deg);padding:var(--space-5);background:#c8bdae}.sheet-label{font:500 9px var(--font-mono);letter-spacing:.1em;color:#695f55}.smoke{position:absolute;border:1.8px solid #39332c;border-radius:50%;width:74%;height:34%;top:31%;left:13%;transform:rotate(-28deg);opacity:.8}.smoke.b{top:44%;transform:rotate(28deg);width:58%;left:24%}.line{height:1px;background:#62584d;margin-top:var(--space-3);opacity:.6}.line.short{width:60%}
+    .pack-copy h2{font-size:var(--text-2xl);font-weight:500}.pack-copy p{color:var(--muted);margin-top:var(--space-5);max-width:49ch}.checklist{list-style:none;display:grid;gap:var(--space-3);margin:var(--space-6) 0}.checklist li{font-size:var(--text-sm);display:flex;gap:var(--space-3);align-items:flex-start}.checklist li::before{content:"↗";color:var(--accent);font-weight:bold}
+    .pricing{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4)}.price-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-6);display:flex;flex-direction:column;min-height:440px}.price-card.featured-card{background:var(--text);color:var(--inverse);border-color:var(--text);position:relative}.badge{font:500 var(--text-xs) var(--font-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--accent);min-height:20px}.price-card h3{font-family:var(--font-body);font-size:var(--text-lg);letter-spacing:-.02em;margin-top:var(--space-3)}.price-card > p{font-size:var(--text-sm);color:var(--muted);margin-top:var(--space-2);min-height:48px}.featured-card > p{color:color-mix(in srgb,var(--inverse) 70%,transparent)}.price{font-family:var(--font-display);font-size:var(--text-2xl);letter-spacing:-.05em;margin-top:var(--space-6)}.price small{font:500 var(--text-sm) var(--font-body);letter-spacing:0;color:var(--muted)}.included{list-style:none;margin:var(--space-6) 0;display:grid;gap:var(--space-3);font-size:var(--text-sm);color:var(--muted)}.featured-card .included{color:color-mix(in srgb,var(--inverse) 70%,transparent)}.included li::before{content:"—";color:var(--accent);margin-right:var(--space-2)}.price-card .btn{margin-top:auto;width:100%}.featured-card .btn{background:var(--accent);color:#fff}.featured-card .btn:hover{background:var(--accent-hover)}
+    .note{background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);padding:var(--space-5);border-radius:var(--radius-md);font-size:var(--text-sm);color:var(--muted)}.note strong{color:var(--text)}
+    footer{padding:var(--space-10) 0;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:var(--text-xs)}.footer-links{display:flex;gap:var(--space-4)}
+    @media(max-width:820px){.nav-links{display:none}.hero,.pack{grid-template-columns:1fr}.hero{padding-top:var(--space-12)}.planner{max-width:620px}.process{grid-template-columns:1fr 1fr}.process article:nth-child(2){margin-right:0}.pricing{grid-template-columns:1fr}.price-card{min-height:auto}.section-head{display:block}.section-head p{margin-top:var(--space-4)}.planner-body{grid-template-columns:1fr}.artboard{min-height:200px}.signal{overflow:auto}.signal span{white-space:nowrap}}
+    @media(max-width:480px){.shell{padding:0 var(--space-4)}.nav-actions .btn{display:none}.hero-ctas .btn{width:100%}.process{grid-template-columns:1fr}.process article{margin-right:0}.signal{font-size:var(--text-xs)}footer{align-items:flex-start;gap:var(--space-4);flex-direction:column}.planner-body{padding:var(--space-4) var(--space-2) var(--space-2)}}
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="shell">
+    <header class="nav">
+      <a class="brand" href="#top" aria-label="InkStory home">
+        <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 2c5.8 3.4 10 8.4 10 14.1C26 22.8 21.5 28 16 30 10.5 28 6 22.8 6 16.1 6 10.4 10.2 5.4 16 2Z" stroke="currentColor" stroke-width="1.6"/><path d="M16 8v16M10.5 13.2 16 18l5.5-4.8M10.5 20.2 16 15l5.5 5.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        InkStory
+      </a>
+      <nav class="nav-links" aria-label="Primary navigation"><a href="#how">How it works</a><a href="#pack">Concept Packs</a><a href="#pricing">Pricing</a></nav>
+      <div class="nav-actions"><button class="icon-btn" data-theme-toggle aria-label="Switch theme">◐</button><a class="btn btn-primary" href="#pricing">Start a concept <span aria-hidden="true">↗</span></a></div>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <div class="eyebrow">Tattoo planning, with intention</div>
+          <h1>Your tattoo starts with a <em>story.</em></h1>
+          <p>InkStory turns your ideas, references and placement into a considered concept pack—so you can arrive at your tattoo consultation with clarity, not a folder full of random screenshots.</p>
+          <div class="hero-ctas"><a href="#pricing" class="btn btn-primary">Start your concept <span aria-hidden="true">↗</span></a><a href="#how" class="btn btn-quiet">See how it works</a></div>
+          <p class="micro">Concepts for conversation. Final artwork belongs with your tattoo artist.</p>
+        </div>
+        <section class="planner" aria-label="Tattoo concept planner preview">
+          <div class="planner-top"><p>CONCEPT BUILDER / 01 OF 05</p><div class="step" aria-label="Step one of five"><i class="active"></i><i></i><i></i><i></i><i></i></div></div>
+          <div class="planner-body">
+            <div class="question"><h2>What do you want this piece to carry?</h2><p>Start with what matters. We will help translate it into a visual direction.</p><div class="choices"><button class="choice selected">A turning point or new beginning</button><button class="choice">A person, memory or legacy</button><button class="choice">Strength, resilience or belief</button></div></div>
+            <div class="artboard" aria-label="Example tattoo concept sketch"><div class="paper"><span></span><div class="tree"><svg viewBox="0 0 100 150" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M50 145c-5-28 3-44-3-63C42 60 25 47 16 26M50 145c8-27-2-46 5-64 7-18 26-36 30-55M47 83C32 70 20 68 7 59M55 80c14-13 28-12 39-22M49 58C38 47 37 30 43 11M51 58c12-12 14-29 8-46M49 100c-14-8-29-3-41-13M52 101c15-10 29-5 41-15"/></svg></div></div><div class="sticker">placement: outer calf</div></div>
+          </div>
+        </section>
+      </section>
+
+      <div class="signal" aria-label="Value statements"><span><strong>Meaning first</strong> — not prompt first</span><span><strong>Built for the body</strong> — not a square canvas</span><span><strong>Artist-ready</strong> — not artist replacement</span></div>
+
+      <section class="section" id="how">
+        <div class="section-head"><h2>From a feeling to a clear direction.</h2><p>Good tattoo planning is part story, part composition and part collaboration. InkStory helps you do the thinking before your artist starts drawing.</p></div>
+        <div class="process">
+          <article><div class="process-num">01 / STORY</div><h3>Begin with meaning</h3><p>Tell us what the tattoo represents: a person, a belief, an ending, a beginning or something you want to carry.</p></article>
+          <article><div class="process-num">02 / CANVAS</div><h3>Choose the body</h3><p>Select placement, scale, desired coverage and whether the piece needs to live alongside existing work.</p></article>
+          <article><div class="process-num">03 / DIRECTION</div><h3>Explore visually</h3><p>Compare distinct visual paths with a considered style, mood and composition—not just a loose prompt.</p></article>
+          <article><div class="process-num">04 / HANDOVER</div><h3>Take it to your artist</h3><p>Save an artist-ready brief that gives your tattooist a meaningful, useful starting point.</p></article>
+        </div>
+      </section>
+    </div>
+
+    <section class="featured" id="pack"><div class="shell section"><div class="pack"><div class="pack-visual" aria-label="InkStory concept pack preview"><div class="sheet one"><div class="sheet-label">STORY / 01</div><div class="smoke"></div><div class="smoke b"></div><div class="line"></div><div class="line short"></div></div><div class="sheet two"><div class="sheet-label">COMPOSITION / 02</div><div class="line"></div><div class="line short"></div><div class="smoke" style="top:45%;height:25%"></div></div></div><div class="pack-copy"><div class="eyebrow">The Concept Pack</div><h2>Bring a better brief to the chair.</h2><p>Your InkStory pack keeps the pieces of your idea together: what it means, how it should feel, where it lives on the body and what needs to remain non-negotiable.</p><ul class="checklist"><li>A focused story and design intention</li><li>Three visual directions to compare</li><li>Placement, scale and composition guidance</li><li>Key elements, references and things to avoid</li><li>A shareable handover for your tattoo artist</li></ul><a class="btn btn-quiet" href="#pricing">Explore concept packs <span aria-hidden="true">↗</span></a></div></div></div></section>
+
+    <div class="shell">
+      <section class="section" id="pricing">
+        <div class="section-head"><h2>Choose how you want to plan your ink.</h2><p>Start exploring for free. Upgrade when you are ready to save, refine and take a clear direction to your artist.</p></div>
+        <div class="pricing">
+          <article class="price-card"><div class="badge">Explore</div><h3>Explorer</h3><p>For the first spark of an idea.</p><div class="price">$0</div><ul class="included"><li>One concept project</li><li>Meaning and style guide</li><li>Three preview concepts</li><li>Basic consultation checklist</li></ul><button class="btn btn-quiet" data-message="Explorer selected — this prototype would open account creation.">Start exploring</button></article>
+          <article class="price-card featured-card"><div class="badge">Most popular</div><h3>Concept Pack</h3><p>For a clear, considered tattoo direction.</p><div class="price">A$19</div><ul class="included"><li>Three visual directions</li><li>12 high-resolution concepts</li><li>Artist-ready tattoo brief</li><li>Downloadable concept pack</li><li>One payment, yours to keep</li></ul><button class="btn" data-message="Concept Pack selected — this prototype would open checkout.">Create my pack <span aria-hidden="true">↗</span></button></article>
+          <article class="price-card"><div class="badge">Large scale</div><h3>Sleeve Planner</h3><p>For pieces that need to wrap, connect and evolve.</p><div class="price">A$49</div><ul class="included"><li>Body-placement photo upload</li><li>Existing tattoo continuity plan</li><li>24 high-resolution concepts</li><li>Large-scale composition brief</li></ul><button class="btn btn-quiet" data-message="Sleeve Planner selected — this prototype would open checkout.">Plan a larger piece</button></article>
+        </div>
+        <div class="note" style="margin-top:var(--space-6)"><strong>For tattoo artists:</strong> InkStory Studio is coming soon—structured client briefs, consultation boards and artist-controlled concept exploration. <a href="#top" style="color:var(--accent);text-decoration:underline">Join the waitlist →</a></div>
+      </section>
+    </div>
+
+    <div class="shell"><footer><span>© 2026 InkStory. Tattoo planning, with intention.</span><div class="footer-links"><a href="#top">Privacy</a><a href="#top">Terms</a><a href="#top">Instagram</a></div></footer></div>
+
+  <script>
+    const root=document.documentElement;
+    const themeBtn=document.querySelector('[data-theme-toggle]');
+    themeBtn.addEventListener('click',()=>{const next=root.dataset.theme==='dark'?'light':'dark';root.dataset.theme=next;themeBtn.textContent=next==='dark'?'◐':'◑';themeBtn.setAttribute('aria-label','Switch to '+(next==='dark'?'light':'dark')+' theme');});
+    document.querySelectorAll('.choice').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('.choice').forEach(b=>b.classList.remove('selected'));button.classList.add('selected');}));
+    document.querySelectorAll('[data-message]').forEach(button=>button.addEventListener('click',()=>{const old=button.innerHTML;button.textContent=button.dataset.message;button.disabled=true;setTimeout(()=>{button.innerHTML=old;button.disabled=false;},2800);}));
+  </script>
+</body>
+</html>
