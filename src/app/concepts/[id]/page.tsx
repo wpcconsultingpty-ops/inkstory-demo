@@ -1,0 +1,116 @@
+import { redirect, notFound } from "next/navigation";
+import Link from "next/link";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import RegenerateButton from "./RegenerateButton";
+import MockPurchase from "./MockPurchase";
+
+export const dynamic = "force-dynamic";
+
+export default async function ConceptsPage({ params }: { params: { id: string } }) {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) redirect(`/auth/login?next=/concepts/${params.id}`);
+
+  const { data: brief } = await supabase.from("briefs").select("*").eq("id", params.id).maybeSingle();
+  if (!brief) notFound();
+
+  const { data: concepts } = await supabase
+    .from("concepts")
+    .select("*")
+    .eq("brief_id", params.id)
+    .order("idx", { ascending: true });
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("brief_id", params.id)
+    .in("status", ["paid", "mock_paid"])
+    .maybeSingle();
+
+  const paid = !!order;
+
+  return (
+    <main className="mx-auto max-w-5xl px-6 py-10">
+      <header className="mb-8 flex items-center justify-between">
+        <Link href="/dashboard" className="text-sm text-ink-muted hover:text-white">← My briefs</Link>
+        <RegenerateButton briefId={brief.id} />
+      </header>
+
+      <h1 className="font-display text-3xl">Three directions from your brief</h1>
+      <p className="mt-2 text-sm text-ink-muted">
+        Each direction is a distinct interpretation of your brief. Pick the one closest to your intent, then take it to your artist —
+        or unlock the Concept Pack for high-res downloads and the artist-ready PDF.
+      </p>
+      <p className="mt-1 text-xs text-ink-muted/70">
+        Demo mode: concept visuals below are generated composition placeholders. AI concept rendering is wired and unlocks once an image key is added.
+      </p>
+
+      <div className="mt-8 grid gap-6 md:grid-cols-3">
+        {(concepts ?? []).map((c) => (
+          <div key={c.id} className="card">
+            <div className="pill">Direction {c.idx + 1}</div>
+            <div className="mt-4 aspect-square overflow-hidden rounded-xl border border-ink-ring bg-ink-edge">
+              {c.image_url ? (
+                paid ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.image_url} alt={`Direction ${c.idx + 1}`} className="h-full w-full object-cover" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={c.image_url}
+                    alt={`Direction ${c.idx + 1}`}
+                    className="h-full w-full object-cover blur-sm brightness-75"
+                  />
+                )
+              ) : (
+                <div className="flex h-full items-center justify-center text-xs text-ink-muted">
+                  Image pending — check back in a moment.
+                </div>
+              )}
+            </div>
+            <p className="mt-3 text-xs text-ink-muted">{c.meta?.variant ?? c.prompt}</p>
+          </div>
+        ))}
+      </div>
+
+      {!paid && (
+        <div className="card mt-10">
+          <div className="pill border-accent/60 text-accent">Concept Pack — A$19</div>
+          <h2 className="mt-3 font-display text-2xl">Unlock high-res & the artist-ready PDF</h2>
+          <ul className="mt-3 space-y-1 text-sm text-ink-muted">
+            <li>Full-resolution concept images without blur</li>
+            <li>Downloadable PDF brief with references</li>
+            <li>Regenerate as many times as you like</li>
+          </ul>
+          <MockPurchase briefId={brief.id} />
+        </div>
+      )}
+
+      <div className="mt-10">
+        <details className="card">
+          <summary className="cursor-pointer font-display">Your brief</summary>
+          <div className="mt-4 space-y-2 text-sm">
+            <Row k="Meaning" v={brief.meaning} />
+            <Row k="Placement" v={brief.placement} />
+            <Row k="Size" v={brief.size_cm} />
+            <Row k="Style" v={brief.style} />
+            <Row k="Palette" v={brief.palette} />
+            <Row k="Elements" v={brief.key_elements} />
+            <Row k="Notes" v={brief.reference_notes} />
+          </div>
+        </details>
+      </div>
+    </main>
+  );
+}
+
+function Row({ k, v }: { k: string; v: string | null }) {
+  return (
+    <div className="flex justify-between gap-6">
+      <span className="text-ink-muted">{k}</span>
+      <span className="max-w-[70%] text-right text-white">{v || "—"}</span>
+    </div>
+  );
+}
