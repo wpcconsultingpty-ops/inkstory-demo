@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  background: #0b0b0d;
+  color: #ececf1;
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.font-display {
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 30, "WONK" 0;
+  letter-spacing: -0.01em;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-medium transition;
+}
+.btn-primary {
+  @apply btn bg-accent text-black hover:bg-accent-soft;
+}
+.btn-ghost {
+  @apply btn border border-ink-ring text-white hover:border-white/60;
+}
+.card {
+  @apply rounded-2xl border border-ink-ring bg-ink-surface p-6;
+}
+.pill {
+  @apply inline-flex items-center rounded-full border border-ink-ring bg-ink-edge px-3 py-1 text-xs text-ink-muted;
+}
+.chip {
+  @apply cursor-pointer select-none rounded-2xl border border-ink-ring bg-ink-edge px-4 py-3 text-sm transition hover:border-white/40;
+}
+.chip-active {
+  @apply border-accent bg-accent/10 text-accent-soft;
+}
+.input, .textarea {
+  @apply w-full rounded-xl border border-ink-ring bg-ink-edge px-4 py-3 text-sm text-white placeholder:text-ink-muted focus:border-accent focus:outline-none;
+}
+.textarea { min-height: 120px; }
