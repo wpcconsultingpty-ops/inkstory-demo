@@ -103,10 +103,11 @@ export function buildTattooPrompt(
   idx: number
 ): string {
   return [
-    "Portfolio-quality tattoo concept illustration, isolated on plain off-white background.",
+    "Portfolio-grade tattoo concept illustration for a real tattoo artist reference.",
+    "Rendered as if drawn in a professional tattoo artist's sketchbook: clean warm off-white paper background, no environment, no product photography styling.",
     base,
     `Direction ${idx + 1} — ${direction.label}: ${direction.detail}.`,
-    "Clean confident linework, intentional negative space, no text, no watermarks, no signature, no frames, no borders.",
-    "Composition centered, suitable for showing to a tattoo artist as a design reference."
+    "Tattoo-flash aesthetic. Use confident linework of varying weight (0.3mm to 1.2mm equivalent). Include appropriate tattoo shading techniques: dot-work stippling for graduated tone, whip-shading for soft transitions, and fine parallel hatching for texture. High tonal contrast where the composition calls for it. Sharp deliberate edges on all glyphs, letterforms, and geometric elements. Preserve intentional negative space so the piece reads clearly at tattoo scale.",
+    "Strict constraints: no text captions, no watermarks, no signature, no frames or borders, no color swatches, no realistic photography, no 3D rendering, no soft blurry edges. Centered composition, single subject group only."
   ].join(" ");
 }

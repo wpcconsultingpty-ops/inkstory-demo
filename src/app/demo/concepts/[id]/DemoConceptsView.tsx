@@ -5,7 +5,7 @@ import Link from "next/link";
 import ConceptImage from "@/app/concepts/[id]/ConceptImage";
 import {
   generateDemoConcepts,
-  generateDemoImagesRemote,
+  generateDemoImageOne,
   getDemoBrief,
   getDemoConcepts,
   markDemoBriefPurchased,
@@ -27,12 +27,22 @@ export default function DemoConceptsView({ briefId }: { briefId: string }) {
 
   async function fetchRealImages() {
     setImageStatus("generating");
-    const updated = await generateDemoImagesRemote(briefId);
-    if (updated && updated.some((c) => !c.meta?.placeholder)) {
+    // Fire all 3 in parallel — each runs in its own function invocation so each
+    // can spend the full 60s Vercel budget on a single high-quality image.
+    const jobs = [0, 1, 2].map(async (i) => {
+      const result = await generateDemoImageOne(briefId, i);
+      // Refresh UI as each image lands so the user sees progressive reveal.
+      refresh();
+      return result;
+    });
+    const results = await Promise.all(jobs);
+    const anySuccess = results.some((r) => r.ok);
+    if (anySuccess) {
       refresh();
       setImageStatus("ready");
     } else {
-      setImageStatus("unavailable");
+      const rateLimited = results.find((r) => !r.ok && r.status === 429);
+      setImageStatus(rateLimited ? "unavailable" : "unavailable");
     }
   }
 
@@ -100,12 +110,12 @@ export default function DemoConceptsView({ briefId }: { briefId: string }) {
       {imageStatus === "generating" && (
         <p className="mt-3 flex items-center gap-2 text-sm text-accent">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
-          Generating your images now — this takes about 20–40 seconds. Placeholders show what layout each direction takes.
+          Generating high-detail concepts — this takes about 40–60 seconds. Placeholders show what layout each direction takes.
         </p>
       )}
       {imageStatus === "unavailable" && (
         <p className="mt-3 text-sm text-red-400">
-          Image generation is temporarily unavailable (the demo is rate-limited to 5 per hour per browser). Sign in with your email to keep generating.
+          Image generation is temporarily unavailable (the demo is rate-limited to 5 briefs per hour per browser). Sign in with your email to keep generating.
         </p>
       )}
       <p className="mt-1 text-xs text-ink-muted/70">

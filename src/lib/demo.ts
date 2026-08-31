@@ -157,36 +157,37 @@ export function generateDemoConcepts(briefId: string): DemoConcept[] {
   return store.concepts.filter((c) => c.brief_id === briefId).sort((a, b) => a.idx - b.idx);
 }
 
-// Kick off real image generation via the demo API. Returns updated concepts on success,
-// null on failure (caller keeps the SVG placeholders).
-export async function generateDemoImagesRemote(briefId: string): Promise<DemoConcept[] | null> {
+// Generate a single direction's image via the demo API and merge into localStorage.
+// Returns the updated concept or null on failure. Caller should race 3 of these.
+export async function generateDemoImageOne(
+  briefId: string,
+  idx: number
+): Promise<{ ok: true; concept: DemoConcept } | { ok: false; status?: number; detail?: string }> {
   const brief = getDemoBrief(briefId);
-  if (!brief) return null;
+  if (!brief) return { ok: false, detail: "missing brief" };
 
   try {
-    const res = await fetch("/api/demo-generate", {
+    const res = await fetch("/api/demo-generate-one", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ brief_id: briefId, brief })
+      body: JSON.stringify({ brief_id: briefId, idx, brief })
     });
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
-      console.warn("[demo] image API failed", res.status, errBody);
-      return null;
+      return { ok: false, status: res.status, detail: errBody?.detail || errBody?.error };
     }
     const data = await res.json();
-    if (!data?.concepts?.length) return null;
+    if (!data?.concept?.image_url) return { ok: false, detail: "no image" };
 
+    const concept = data.concept as DemoConcept;
     const store = read();
-    store.concepts = store.concepts.filter((c) => c.brief_id !== briefId);
-    for (const c of data.concepts as DemoConcept[]) {
-      if (c.image_url) store.concepts.push(c);
-    }
+    store.concepts = store.concepts.filter((c) => !(c.brief_id === briefId && c.idx === idx));
+    store.concepts.push(concept);
     write(store);
-    return getDemoConcepts(briefId);
+    return { ok: true, concept };
   } catch (e) {
     console.warn("[demo] image API error", (e as Error).message);
-    return null;
+    return { ok: false, detail: (e as Error).message };
   }
 }
 

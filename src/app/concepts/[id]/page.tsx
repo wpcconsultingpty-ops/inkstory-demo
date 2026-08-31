@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import RegenerateButton from "./RegenerateButton";
 import MockPurchase from "./MockPurchase";
-import ConceptImage from "./ConceptImage";
+import ConceptsGrid from "./ConceptsGrid";
 
 export const dynamic = "force-dynamic";
 
@@ -44,32 +44,12 @@ export default async function ConceptsPage({ params }: { params: { id: string } 
         Each direction is a distinct interpretation of your brief. Preview them here — pick your favourite and unlock the
         Concept Pack for downloadable high-res files and the artist-ready PDF.
       </p>
-      <p className="mt-1 text-xs text-ink-muted/70">
-        Demo mode: concept visuals below are generated composition placeholders. AI concept rendering is wired and unlocks once an image key is added.
-      </p>
-
-      <div className="mt-8 grid gap-6 md:grid-cols-3">
-        {(concepts ?? []).map((c) => (
-          <div key={c.id} className="card">
-            <div className="pill">Direction {c.idx + 1}</div>
-            <div className="mt-4 aspect-square overflow-hidden rounded-xl border border-ink-ring bg-ink-edge">
-              {c.image_url ? (
-                <ConceptImage
-                  src={c.image_url}
-                  alt={`Direction ${c.idx + 1}`}
-                  paid={paid}
-                  index={c.idx}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-ink-muted">
-                  Image pending — check back in a moment.
-                </div>
-              )}
-            </div>
-            <p className="mt-3 text-xs text-ink-muted">{c.meta?.variant ?? c.prompt}</p>
-          </div>
-        ))}
-      </div>
+      <ConceptsGrid
+        briefId={brief.id}
+        initialConcepts={(concepts ?? []) as any}
+        paid={paid}
+        briefStatus={brief.status ?? null}
+      />
 
       {!paid && (
         <div className="card mt-10">
