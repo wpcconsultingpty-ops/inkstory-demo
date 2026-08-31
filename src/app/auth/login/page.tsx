@@ -1,61 +1,121 @@
 "use client";
 
 import { useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const next = params.get("next") ?? "/dashboard";
+
   const [email, setEmail] = useState("");
-  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [code, setCode] = useState("");
+  const [stage, setStage] = useState<"email" | "code">("email");
+  const [state, setState] = useState<"idle" | "working" | "error">("idle");
   const [msg, setMsg] = useState("");
 
-  async function submit(e: React.FormEvent) {
+  async function sendCode(e: React.FormEvent) {
     e.preventDefault();
-    setState("sending");
+    setState("working");
+    setMsg("");
     const supabase = createSupabaseBrowserClient();
-    const emailRedirectTo = `${window.location.origin}/auth/callback`;
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo }
+      options: { shouldCreateUser: true }
     });
     if (error) {
       setState("error");
       setMsg(error.message);
     } else {
-      setState("sent");
+      setStage("code");
+      setState("idle");
+    }
+  }
+
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    setState("working");
+    setMsg("");
+    const supabase = createSupabaseBrowserClient();
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: code.trim(),
+      type: "email"
+    });
+    if (error) {
+      setState("error");
+      setMsg(error.message);
+    } else {
+      router.push(next);
+      router.refresh();
     }
   }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
       <Link href="/" className="mb-8 text-sm text-ink-muted hover:text-white">← Back</Link>
-      <h1 className="font-display text-3xl">Sign in</h1>
-      <p className="mt-2 text-sm text-ink-muted">
-        Enter your email and we&apos;ll send a one-tap magic link. No password to remember.
-      </p>
 
-      {state === "sent" ? (
-        <div className="card mt-8">
-          <p className="text-sm">
-            Check <span className="text-white">{email}</span> for a sign-in link. You can close this tab.
+      {stage === "email" ? (
+        <>
+          <h1 className="font-display text-3xl">Sign in</h1>
+          <p className="mt-2 text-sm text-ink-muted">
+            Enter your email and we&apos;ll send you a one-time code.
           </p>
-        </div>
+          <form onSubmit={sendCode} className="mt-8 space-y-3">
+            <input
+              type="email"
+              required
+              placeholder="you@example.com"
+              className="input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoFocus
+            />
+            <button className="btn-primary w-full" disabled={state === "working"}>
+              {state === "working" ? "Sending code…" : "Email me a code"}
+            </button>
+          </form>
+        </>
       ) : (
-        <form onSubmit={submit} className="mt-8 space-y-3">
-          <input
-            type="email"
-            required
-            placeholder="you@example.com"
-            className="input"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <button className="btn-primary w-full" disabled={state === "sending"}>
-            {state === "sending" ? "Sending…" : "Send magic link"}
-          </button>
-          {state === "error" && <p className="text-sm text-red-400">{msg}</p>}
-        </form>
+        <>
+          <h1 className="font-display text-3xl">Check your email</h1>
+          <p className="mt-2 text-sm text-ink-muted">
+            We sent a 6-digit code to <span className="text-white">{email}</span>. Enter it below to continue.
+          </p>
+          <form onSubmit={verifyCode} className="mt-8 space-y-3">
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="one-time-code"
+              maxLength={6}
+              required
+              placeholder="123456"
+              className="input text-center text-2xl tracking-[0.5em]"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              autoFocus
+            />
+            <button className="btn-primary w-full" disabled={state === "working" || code.length !== 6}>
+              {state === "working" ? "Verifying…" : "Continue"}
+            </button>
+            <button
+              type="button"
+              className="w-full text-xs text-ink-muted hover:text-white"
+              onClick={() => {
+                setStage("email");
+                setCode("");
+                setMsg("");
+              }}
+            >
+              Use a different email
+            </button>
+          </form>
+        </>
       )}
+
+      {state === "error" && msg && <p className="mt-4 text-sm text-red-400">{msg}</p>}
     </main>
   );
 }
