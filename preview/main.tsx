@@ -25,7 +25,7 @@ function App() {
   else view = <AccountUnavailable message="This isolated preview has no account connection and cannot make AI requests or take payment. The local planning flow uses the same components as the repaired application." />;
   return <Navigation.Provider value={{ route, navigate }}>
     <div className="border-b border-ink-ring px-5 py-3 text-center text-xs text-ink-muted">
-      Isolated preview · No account access, AI charges or payments · Production is unchanged
+      Isolated preview · Memory-only notes · No account access, AI charges or payments · Production is unchanged
     </div>
     <div key={route}>{view}</div>
   </Navigation.Provider>;

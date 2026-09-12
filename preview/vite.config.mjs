@@ -13,6 +13,9 @@ export default defineConfig({
     ]
   },
   define: {
+    // The review iframe has no persistent browser storage. Exercise the real
+    // demo's existing, visibly labelled memory-only fallback instead.
+    "window.localStorage": "undefined",
     "process.env.NEXT_PUBLIC_SUPABASE_URL": JSON.stringify(""),
     "process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY": JSON.stringify("")
   },
