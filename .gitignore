@@ -1,7 +1,14 @@
 node_modules
 .next
+.next-*
+*.tsbuildinfo
 out
 .env
 .env.local
 .vercel
 *.log
+.env.*
+!.env.example
+test-results
+artifacts
+preview-dist

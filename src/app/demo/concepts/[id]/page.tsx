@@ -2,6 +2,7 @@ import DemoConceptsView from "./DemoConceptsView";
 
 export const dynamic = "force-dynamic";
 
-export default function DemoConceptsPage({ params }: { params: { id: string } }) {
-  return <DemoConceptsView briefId={params.id} />;
+export default async function DemoConceptsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <DemoConceptsView briefId={id} />;
 }

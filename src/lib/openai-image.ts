@@ -1,5 +1,7 @@
-// Real image generation via OpenAI gpt-image-1.
-// Falls back to null on error so the caller can substitute the SVG placeholder.
+import { RequestError, decodeRasterBase64, readLimitedBody, requireGenerationEnabled } from "./security";
+
+// This helper may only be called AFTER a durable pilot reservation. No automatic
+// retries: an ambiguous network failure can still have incurred provider cost.
 
 const OPENAI_URL = "https://api.openai.com/v1/images/generations";
 
@@ -9,91 +11,54 @@ export type GeneratedImage = {
   model: string;
 };
 
-async function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 export async function generateTattooImage(
   prompt: string,
-  opts: { size?: "1024x1024" | "1024x1792" | "1792x1024"; quality?: "low" | "medium" | "high" } = {}
-): Promise<GeneratedImage | null> {
+  opts: { size?: "1024x1024" | "1024x1536" | "1536x1024"; quality?: "low" | "medium" | "high" } = {}
+): Promise<GeneratedImage> {
+  requireGenerationEnabled(process.env.INKSTORY_GENERATION_ENABLED);
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) throw new RequestError(503, "Image generation is unavailable.");
 
   const size = opts.size ?? "1024x1024";
   const quality = opts.quality ?? "low";
 
-  // Retry once on 429 (rate limit) with a short backoff.
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetch(OPENAI_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "gpt-image-1",
-          prompt,
-          size,
-          quality,
-          n: 1
-        })
-      });
+  try {
+    const res = await fetch(OPENAI_URL, {
+      method: "POST",
+      signal: AbortSignal.timeout(45_000),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "gpt-image-1",
+        prompt,
+        size,
+        quality,
+        output_format: "png",
+        n: 1
+      })
+    });
 
-      if (res.status === 429) {
-        const retryAfter = Number(res.headers.get("retry-after")) || 20;
-        console.warn(`[openai-image] 429 rate limited, retry-after ${retryAfter}s, attempt ${attempt + 1}`);
-        if (attempt === 0) {
-          await sleep(Math.min(retryAfter, 30) * 1000);
-          continue;
-        }
-        return null;
-      }
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error("[openai-image] non-2xx", res.status, errText.slice(0, 200));
-        return null;
-      }
-
-      const json = await res.json();
-      const b64 = json?.data?.[0]?.b64_json;
-      if (!b64) {
-        console.error("[openai-image] no b64 in response", JSON.stringify(json).slice(0, 200));
-        return null;
-      }
-      return { b64, size, model: "gpt-image-1" };
-    } catch (e) {
-      console.error("[openai-image] fetch failed", (e as Error).message);
-      if (attempt === 0) {
-        await sleep(3000);
-        continue;
-      }
-      return null;
+    if (res.status === 429) {
+      await res.body?.cancel();
+      throw new RequestError(503, "The image provider is busy. The reserved pilot allowance remains counted.");
     }
-  }
-  return null;
-}
 
-// Fire multiple image requests with staggered start times to stay under
-// OpenAI's per-minute image rate limit while keeping total latency low.
-// Requests run in parallel but their starts are spaced by `staggerMs`.
-export async function generateTattooImageSeries(
-  prompts: string[],
-  opts: {
-    size?: "1024x1024" | "1024x1792" | "1792x1024";
-    quality?: "low" | "medium" | "high";
-    staggerMs?: number;
-  } = {}
-): Promise<(GeneratedImage | null)[]> {
-  const stagger = opts.staggerMs ?? 2000;
-  const jobs = prompts.map((prompt, i) =>
-    sleep(i * stagger).then(() =>
-      generateTattooImage(prompt, { size: opts.size, quality: opts.quality })
-    )
-  );
-  return Promise.all(jobs);
+    if (!res.ok) {
+      await res.body?.cancel();
+      throw new RequestError(502, "Image generation failed. Existing artwork has not been changed.");
+    }
+    const bytes = await readLimitedBody(res, 12 * 1024 * 1024);
+    const json = JSON.parse(new TextDecoder().decode(bytes));
+    const b64 = json?.data?.[0]?.b64_json;
+    if (typeof b64 !== "string") throw new RequestError(502, "The image provider did not return an image.");
+    decodeRasterBase64(b64, "image/png");
+    return { b64, size, model: "gpt-image-1" };
+  } catch (error) {
+    if (error instanceof RequestError && error.status !== 413 && error.status !== 400) throw error;
+    throw new RequestError(502, "Image generation failed or timed out. The reserved pilot allowance remains counted.");
+  }
 }
 
 // Build a strong tattoo-specific prompt for a given direction.

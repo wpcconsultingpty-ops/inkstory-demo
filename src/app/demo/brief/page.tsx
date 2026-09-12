@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export default function DemoBriefPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<p role="status" className="p-6">Opening local brief…</p>}>
       <DemoBriefWizard />
     </Suspense>
   );

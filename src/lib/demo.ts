@@ -1,245 +1,124 @@
-// Local-only demo mode. Nothing here hits Supabase — briefs, concepts, and
-// mock-purchase orders live in the browser's localStorage. Great for hands-on
-// demos where you don't want to require sign-in.
+import { draftFrom } from "@/components/brief-validation";
+import type { BriefDraft } from "@/lib/brief";
 
-const KEY = "inkstory.demo.v1";
+// No account state, remote images, generation calls or entitlements in the demo.
+const KEY = "inkstory.demo.v2";
+let memory: DemoBrief[] = [];
+let storageState: "checking" | "local" | "memory" = "checking";
+let loaded = false;
 
-export type DemoBrief = {
+export type DemoBrief = BriefDraft & {
   id: string;
-  meaning: string | null;
-  placement: string | null;
-  size_cm: string | null;
-  style: string | null;
-  palette: string | null;
-  key_elements: string | null;
-  reference_notes: string | null;
-  status: "draft" | "generated" | "mock_paid";
+  status: "draft" | "reviewed";
+  preferred_layout: number | null;
   created_at: string;
   updated_at: string;
 };
 
-export type DemoConcept = {
-  id: string;
-  brief_id: string;
-  idx: number;
-  prompt: string;
-  image_url: string;
-  meta: { variant?: string; placeholder?: boolean; model?: string; upload_failed?: boolean };
+export const EXAMPLE_LAYOUTS = [
+  { label: "Quiet focal point", description: "One focal shape with generous space around it.", question: "Which single element matters most, and what can be left out?" },
+  { label: "Balanced grouping", description: "A central shape framed by two supporting shapes.", question: "Which elements should be central and which should support them?" },
+  { label: "Flowing sequence", description: "A diagonal arrangement that suggests movement.", question: "How could the story follow the curve and movement of your chosen placement?" },
+] as const;
+
+export const SAMPLE_BRIEF: DemoBrief = {
+  id: "sample",
+  meaning: "A reminder to keep exploring and to make time for the outdoors. The piece should feel calm and open.",
+  placement: "Inner forearm",
+  size_cm: "Medium (8–15cm)",
+  style: "Fine-line",
+  palette: "Black-line only",
+  key_elements: "Mountain outline, winding trail and a small sun",
+  reference_notes: "Leave breathing room between elements. Ask the artist how much detail will age well at this size.",
+  preferred_layout: null,
+  status: "reviewed",
+  created_at: "",
+  updated_at: "",
 };
 
-type DemoStore = {
-  briefs: DemoBrief[];
-  concepts: DemoConcept[];
-};
-
-function empty(): DemoStore {
-  return { briefs: [], concepts: [] };
-}
-
-function read(): DemoStore {
-  if (typeof window === "undefined") return empty();
+function ensureLoaded() {
+  if (typeof window === "undefined" || loaded) return;
+  loaded = true;
   try {
     const raw = window.localStorage.getItem(KEY);
-    if (!raw) return empty();
-    const parsed = JSON.parse(raw);
-    return {
-      briefs: Array.isArray(parsed.briefs) ? parsed.briefs : [],
-      concepts: Array.isArray(parsed.concepts) ? parsed.concepts : []
-    };
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) throw new Error("Invalid local draft data");
+    memory = parsed.filter((item) => item && typeof item.id === "string").map((item) => ({
+      ...draftFrom(item),
+      id: item.id,
+      status: item.status === "reviewed" ? "reviewed" : "draft",
+      preferred_layout: Number.isInteger(item.preferred_layout) && item.preferred_layout >= 0 && item.preferred_layout < 3 ? item.preferred_layout : null,
+      created_at: typeof item.created_at === "string" ? item.created_at : "",
+      updated_at: typeof item.updated_at === "string" ? item.updated_at : "",
+    }));
+    // Test writes as well as reads: quota/private modes may only block writes.
+    window.localStorage.setItem(KEY, JSON.stringify(memory));
+    storageState = "local";
   } catch {
-    return empty();
+    storageState = "memory";
   }
 }
 
-function write(store: DemoStore) {
+function persist() {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(store));
+  try {
+    window.localStorage.setItem(KEY, JSON.stringify(memory));
+    storageState = "local";
+  } catch {
+    storageState = "memory";
+  }
 }
 
-const DEMO_FLAG = "inkstory.demo.active";
-
-export function isDemoActive(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(DEMO_FLAG) === "1";
+export function getDemoStorageState() {
+  ensureLoaded();
+  return storageState;
 }
 
-export function activateDemo() {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(DEMO_FLAG, "1");
-}
-
-export function deactivateDemo() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(DEMO_FLAG);
-}
-
-function uid() {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-
-export function createDemoBrief(): DemoBrief {
-  const store = read();
+export function createDemoBrief(draft?: BriefDraft): DemoBrief {
+  ensureLoaded();
   const now = new Date().toISOString();
-  const brief: DemoBrief = {
-    id: uid(),
-    meaning: null,
-    placement: null,
-    size_cm: null,
-    style: null,
-    palette: null,
-    key_elements: null,
-    reference_notes: null,
-    status: "draft",
-    created_at: now,
-    updated_at: now
-  };
-  store.briefs.unshift(brief);
-  write(store);
-  return brief;
+  const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const brief: DemoBrief = { ...draftFrom(draft), id, status: "draft", preferred_layout: null, created_at: now, updated_at: now };
+  memory.unshift(brief);
+  persist();
+  return { ...brief };
 }
 
-export function updateDemoBrief(id: string, patch: Partial<DemoBrief>): DemoBrief | null {
-  const store = read();
-  const b = store.briefs.find((x) => x.id === id);
-  if (!b) return null;
-  Object.assign(b, patch, { updated_at: new Date().toISOString() });
-  write(store);
-  return b;
+export function updateDemoBrief(id: string, patch: Partial<BriefDraft> & { status?: "draft" | "reviewed"; preferred_layout?: number | null }): DemoBrief | null {
+  ensureLoaded();
+  const index = memory.findIndex((brief) => brief.id === id);
+  if (index < 0) return null;
+  memory[index] = { ...memory[index], ...patch, updated_at: new Date().toISOString() };
+  persist();
+  return { ...memory[index] };
 }
 
 export function getDemoBrief(id: string): DemoBrief | null {
-  return read().briefs.find((b) => b.id === id) ?? null;
+  ensureLoaded();
+  const brief = memory.find((item) => item.id === id);
+  return brief ? { ...brief } : null;
 }
 
 export function listDemoBriefs(): DemoBrief[] {
-  return read()
-    .briefs.slice()
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  ensureLoaded();
+  return memory.map((brief) => ({ ...brief })).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
 
-export function getDemoConcepts(briefId: string): DemoConcept[] {
-  return read()
-    .concepts.filter((c) => c.brief_id === briefId)
-    .sort((a, b) => a.idx - b.idx);
-}
-
-// Instant SVG concepts — shown immediately, replaced by real images when the API returns.
-export function generateDemoConcepts(briefId: string): DemoConcept[] {
-  const store = read();
-  const brief = store.briefs.find((b) => b.id === briefId);
-  if (!brief) return [];
-
-  store.concepts = store.concepts.filter((c) => c.brief_id !== briefId);
-
-  const variants = [
-    { label: "Considered & minimal", tone: "sparse geometric composition" },
-    { label: "Balanced & symbolic", tone: "layered symbolic composition" },
-    { label: "Dynamic & story-forward", tone: "flowing narrative composition" }
-  ];
-
-  for (let i = 0; i < 3; i++) {
-    const v = variants[i];
-    store.concepts.push({
-      id: uid(),
-      brief_id: briefId,
-      idx: i,
-      prompt: `${v.tone} — ${brief.meaning ?? ""}`,
-      image_url: buildPlaceholderSvg(brief, i),
-      meta: { variant: v.label, placeholder: true }
-    });
-  }
-
-  brief.status = "generated";
-  brief.updated_at = new Date().toISOString();
-  write(store);
-  return store.concepts.filter((c) => c.brief_id === briefId).sort((a, b) => a.idx - b.idx);
-}
-
-// Generate a single direction's image via the demo API and merge into localStorage.
-// Returns the updated concept or null on failure. Caller should race 3 of these.
-export async function generateDemoImageOne(
-  briefId: string,
-  idx: number
-): Promise<{ ok: true; concept: DemoConcept } | { ok: false; status?: number; detail?: string }> {
-  const brief = getDemoBrief(briefId);
-  if (!brief) return { ok: false, detail: "missing brief" };
-
+export function clearDemoData(): boolean {
+  memory = [];
+  loaded = true;
+  if (typeof window === "undefined") return false;
   try {
-    const res = await fetch("/api/demo-generate-one", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ brief_id: briefId, idx, brief })
-    });
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
-      return { ok: false, status: res.status, detail: errBody?.detail || errBody?.error };
-    }
-    const data = await res.json();
-    if (!data?.concept?.image_url) return { ok: false, detail: "no image" };
-
-    const concept = data.concept as DemoConcept;
-    const store = read();
-    store.concepts = store.concepts.filter((c) => !(c.brief_id === briefId && c.idx === idx));
-    store.concepts.push(concept);
-    write(store);
-    return { ok: true, concept };
-  } catch (e) {
-    console.warn("[demo] image API error", (e as Error).message);
-    return { ok: false, detail: (e as Error).message };
+    window.localStorage.removeItem(KEY);
+    // Also clear legacy local demo data; never import it into this pilot.
+    window.localStorage.removeItem("inkstory.demo.v1");
+    window.localStorage.removeItem("inkstory.demo.active");
+    storageState = "local";
+    return true;
+  } catch {
+    storageState = "memory";
+    return false;
   }
-}
-
-export function markDemoBriefPurchased(briefId: string) {
-  const store = read();
-  const b = store.briefs.find((x) => x.id === briefId);
-  if (b) {
-    b.status = "mock_paid";
-    b.updated_at = new Date().toISOString();
-    write(store);
-  }
-}
-
-export function clearDemoData() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(KEY);
-  window.localStorage.removeItem(DEMO_FLAG);
-}
-
-function buildPlaceholderSvg(brief: DemoBrief, idx: number): string {
-  // Deterministic SVG per direction — same style as the server-side generator.
-  const hues = [28, 200, 340]; // warm gold, cool teal, mulberry
-  const hue = hues[idx];
-  const label = ["Considered & minimal", "Balanced & symbolic", "Dynamic & story-forward"][idx];
-  const rings = idx + 2;
-
-  const ringEls = Array.from({ length: rings }, (_, i) => {
-    const r = 120 + i * 50;
-    return `<circle cx="256" cy="256" r="${r}" fill="none" stroke="hsla(${hue}, 45%, 60%, ${0.35 + i * 0.15})" stroke-width="1.5" />`;
-  }).join("");
-
-  const runes = Array.from({ length: 12 }, (_, i) => {
-    const a = (i / 12) * Math.PI * 2;
-    const rx = 256 + Math.cos(a) * 220;
-    const ry = 256 + Math.sin(a) * 220;
-    return `<circle cx="${rx.toFixed(1)}" cy="${ry.toFixed(1)}" r="2.5" fill="hsl(${hue}, 55%, 70%)" />`;
-  }).join("");
-
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' width='512' height='512'>
-  <defs>
-    <radialGradient id='g${idx}' cx='50%' cy='50%' r='50%'>
-      <stop offset='0%' stop-color='hsl(${hue}, 30%, 22%)' />
-      <stop offset='100%' stop-color='#0b0b0d' />
-    </radialGradient>
-  </defs>
-  <rect width='512' height='512' fill='url(#g${idx})' />
-  ${ringEls}
-  ${runes}
-  <path d='M 130 340 Q 256 220 382 340' fill='none' stroke='hsla(${hue}, 60%, 75%, 0.55)' stroke-width='2' />
-  <path d='M 130 260 Q 256 380 382 260' fill='none' stroke='hsla(${hue}, 60%, 75%, 0.35)' stroke-width='1.5' />
-  <text x='256' y='470' font-family='Georgia, serif' font-size='16' fill='hsla(0,0%,100%,0.7)' text-anchor='middle' font-style='italic'>${label}</text>
-</svg>`;
-
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }

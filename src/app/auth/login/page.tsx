@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<p role="status" className="p-6">Opening sign-in…</p>}>
       <LoginForm />
     </Suspense>
   );

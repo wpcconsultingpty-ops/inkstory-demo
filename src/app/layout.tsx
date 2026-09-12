@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "InkStory — Your tattoo starts with a story",
+  title: "InkStory — Tattoo planning, early-access preview",
   description:
-    "InkStory turns your meaning into a considered tattoo concept. Five questions. Three concept directions. One artist-ready brief.",
+    "Explore a local tattoo discussion brief and abstract example layouts. A planning preview with invitation-only account generation, not a paid tattoo design service.",
   metadataBase: new URL("https://inkstory-tattoo-planner.vercel.app"),
   openGraph: {
     title: "InkStory",
-    description: "Your tattoo starts with a story.",
+    description: "Your tattoo starts with a story. Explore the local planning preview; account image generation is invitation-only.",
     type: "website"
   }
 };

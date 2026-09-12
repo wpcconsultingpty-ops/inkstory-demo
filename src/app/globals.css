@@ -43,6 +43,28 @@ html, body {
   @apply border-accent bg-accent/10 text-accent-soft;
 }
 .input, .textarea {
-  @apply w-full rounded-xl border border-ink-ring bg-ink-edge px-4 py-3 text-sm text-white placeholder:text-ink-muted focus:border-accent focus:outline-none;
+  @apply w-full rounded-xl border border-ink-ring bg-ink-edge px-4 py-3 text-base text-white placeholder:text-ink-muted focus:border-accent focus:outline-none;
 }
 .textarea { min-height: 120px; }
+
+button:disabled, fieldset:disabled .chip { cursor: not-allowed; opacity: .55; }
+a, button, input, textarea, summary { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid #f0d9b3; outline-offset: 4px; }
+.chip:focus-within { outline: 2px solid #f0d9b3; outline-offset: 3px; }
+textarea { resize: vertical; }
+body { line-height: 1.6; }
+main { overflow-wrap: anywhere; }
+#inkstory-print-brief { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+@media print {
+  @page { size: A4; margin: 18mm; }
+  html, body { background: #fff !important; color: #111 !important; color-scheme: light; }
+  body:has(#inkstory-print-brief) > :not(#inkstory-print-brief) { display: none !important; }
+  #inkstory-print-brief { display: block !important; color: #111; font-family: sans-serif; font-size: 11pt; line-height: 1.5; }
+  #inkstory-print-brief h1 { font-size: 20pt; line-height: 1.2; margin-bottom: 10pt; }
+  #inkstory-print-brief h2 { font-size: 12pt; margin-top: 18pt; margin-bottom: 5pt; break-after: avoid; }
+  #inkstory-print-brief p { white-space: pre-wrap; overflow-wrap: anywhere; orphans: 3; widows: 3; }
+}

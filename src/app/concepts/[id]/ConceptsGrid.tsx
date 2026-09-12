@@ -1,162 +1,88 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useRef, useState } from "react";
+import Link from "next/link";
+import type { BriefDraft } from "@/lib/brief";
+import { generationError } from "@/components/pilot-client";
+import { EarlyAccessLink } from "@/components/PilotLinks";
+import ExportBrief from "@/components/ExportBrief";
 import ConceptImage from "./ConceptImage";
 
-type Concept = {
+export type Concept = {
   id: string;
   idx: number;
   image_url: string | null;
-  prompt: string;
-  meta: Record<string, any>;
+  meta: { variant?: string } | null;
 };
 
-type Props = {
-  briefId: string;
-  initialConcepts: Concept[];
-  paid: boolean;
-  briefStatus: string | null;
-};
+const LABELS = ["Considered & minimal", "Balanced & symbolic", "Dynamic & story-forward"];
 
-const NUM_DIRECTIONS = 3;
+export default function ConceptsGrid({ briefId, initialConcepts, brief }: { briefId: string; initialConcepts: Concept[]; brief: BriefDraft }) {
+  const [slots, setSlots] = useState<(Concept | null)[]>(() => LABELS.map((_, index) => initialConcepts.find((concept) => concept.idx === index) ?? null));
+  const [pending, setPending] = useState<number | null>(null);
+  const [errors, setErrors] = useState<(string | null)[]>([null, null, null]);
+  const [revisions, setRevisions] = useState([0, 0, 0]);
+  const lock = useRef(false);
 
-export default function ConceptsGrid({ briefId, initialConcepts, paid, briefStatus }: Props) {
-  // Slots for each direction: whichever concept row exists at that idx, or null
-  const [slots, setSlots] = useState<(Concept | null)[]>(() =>
-    Array.from({ length: NUM_DIRECTIONS }, (_, i) => initialConcepts.find((c) => c.idx === i) ?? null)
-  );
-  const [pending, setPending] = useState<boolean[]>(() =>
-    Array.from({ length: NUM_DIRECTIONS }, (_, i) => !initialConcepts.some((c) => c.idx === i && c.image_url))
-  );
-  const [errors, setErrors] = useState<(string | null)[]>(() =>
-    Array.from({ length: NUM_DIRECTIONS }, () => null)
-  );
-  const startedRef = useRef(false);
-
-  useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-
-    // If the brief is in a "generating" state OR any slot is missing an image,
-    // kick off generation for the missing slots in parallel.
-    const missing = slots
-      .map((c, i) => (c && c.image_url ? -1 : i))
-      .filter((i) => i >= 0);
-
-    if (missing.length === 0) return;
-
-    missing.forEach((idx) => generateOne(idx));
-     
-  }, []);
-
-  async function generateOne(idx: number) {
-    setPending((p) => {
-      const next = [...p];
-      next[idx] = true;
-      return next;
-    });
-    setErrors((e) => {
-      const next = [...e];
-      next[idx] = null;
-      return next;
-    });
-
+  async function generateOne(index: number) {
+    if (lock.current) return;
+    lock.current = true;
+    setPending(index);
+    setErrors((current) => current.map((error, slot) => slot === index ? null : error));
     try {
-      const res = await fetch("/api/generate-one", {
+      const response = await fetch("/api/generate-one", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ brief_id: briefId, idx })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief_id: briefId, idx: index }),
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${res.status}`);
+      if (!response.ok) throw new Error(generationError(response.status));
+      const { concept } = await response.json();
+      if (!concept || typeof concept.id !== "string" || !/^[a-f0-9-]{36}$/i.test(concept.id) || concept.idx !== index || !concept.image_url) {
+        throw new Error("The response did not confirm a saved image. Refresh to check before trying again; the request may still count towards your allowance.");
       }
-      const { concept } = await res.json();
-      setSlots((s) => {
-        const next = [...s];
-        next[idx] = concept;
-        return next;
-      });
-    } catch (e: any) {
-      setErrors((err) => {
-        const next = [...err];
-        next[idx] = e?.message ?? "Generation failed";
-        return next;
-      });
+      setSlots((current) => current.map((slot, slotIndex) => slotIndex === index ? concept as Concept : slot));
+      setRevisions((current) => current.map((value, slot) => slot === index ? value + 1 : value));
+    } catch (cause) {
+      const message = cause instanceof Error && cause.name !== "TypeError" ? cause.message : "The generation request could not be confirmed. Check your connection and refresh for a saved result before retrying. A request may still count towards your allowance.";
+      setErrors((current) => current.map((error, slot) => slot === index ? message : error));
     } finally {
-      setPending((p) => {
-        const next = [...p];
-        next[idx] = false;
-        return next;
-      });
+      setPending(null);
+      lock.current = false;
     }
   }
-
-  // If everything is now done, tell the brief status
-  useEffect(() => {
-    const allDone = slots.every((s) => s && s.image_url);
-    if (allDone && briefStatus !== "concepts_ready") {
-      const supa = createSupabaseBrowserClient();
-      supa.from("briefs").update({ status: "concepts_ready" }).eq("id", briefId).then(() => {});
-    }
-     
-  }, [slots]);
-
-  const variantLabels = [
-    "Considered & minimal",
-    "Balanced & symbolic",
-    "Dynamic & story-forward"
-  ];
-
   return (
-    <div className="mt-8 grid gap-6 md:grid-cols-3">
-      {Array.from({ length: NUM_DIRECTIONS }).map((_, i) => {
-        const c = slots[i];
-        const isPending = pending[i];
-        const err = errors[i];
-        return (
-          <div key={i} className="card">
-            <div className="pill">Direction {i + 1}</div>
-            <div className="mt-4 aspect-square overflow-hidden rounded-xl border border-ink-ring bg-ink-edge">
-              {c?.image_url ? (
-                <ConceptImage src={c.image_url} alt={`Direction ${i + 1}`} paid={paid} index={i} />
-              ) : isPending ? (
-                <PendingTile />
-              ) : err ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-xs text-ink-muted">
-                  <p>Couldn&apos;t generate this direction.</p>
-                  <p className="text-ink-muted/70">{err}</p>
-                  <button
-                    onClick={() => generateOne(i)}
-                    className="rounded-full border border-ink-ring px-3 py-1 text-xs text-white hover:bg-white/5"
-                  >
-                    Try again
-                  </button>
-                </div>
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-ink-muted">
-                  Waiting…
+    <>
+      <p className="mt-4 text-sm text-ink-muted">Nothing generates automatically when this page opens. Each request sends this saved brief to OpenAI and uses the pilot allowance, including failed attempts after generation has been reserved. A replacement appears only after it is saved successfully.</p>
+      <div className="mt-8 grid gap-5 md:grid-cols-3">
+        {LABELS.map((label, index) => {
+          const concept = slots[index];
+          const hasImage = !!concept?.image_url;
+          return (
+            <section key={index} className="card p-5" aria-labelledby={`direction-${index}`} aria-busy={pending === index}>
+              <span className="pill">Pilot direction {index + 1}</span>
+              <h2 id={`direction-${index}`} className="mt-3 text-lg font-medium">{typeof concept?.meta?.variant === "string" ? concept.meta.variant : label}</h2>
+              {hasImage && concept ? <ConceptImage key={`${concept.id}-${revisions[index]}`} conceptId={concept.id} index={index} /> : (
+                <div className="mt-4 flex aspect-square items-center justify-center rounded-xl border border-ink-ring bg-ink-edge p-5 text-center text-sm text-ink-muted">
+                  {pending === index ? "Requesting an AI-assisted image. This can take a while; please keep this page open." : "No saved image for this direction. Generation requires an invited account and an available allowance."}
                 </div>
               )}
-            </div>
-            <p className="mt-3 text-xs text-ink-muted">{c?.meta?.variant ?? variantLabels[i]}</p>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function PendingTile() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
-      <div className="flex items-center gap-2 text-xs text-ink-muted">
-        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent"></span>
-        Generating high-detail concept…
+              {pending === index && <p role="status" className="mt-3 text-sm text-accent-soft">Generation request in progress. Do not submit it again.</p>}
+              {errors[index] && <div role="alert" className="mt-4 text-sm text-red-200">
+                <p>{errors[index]}</p>
+                <div className="mt-3 flex flex-col gap-3">
+                  <Link className="underline" href={`/brief?id=${encodeURIComponent(briefId)}`}>Review your brief</Link>
+                  <Link className="underline" href={`/auth/login?next=${encodeURIComponent(`/concepts/${briefId}`)}`}>Sign in again</Link>
+                  <EarlyAccessLink className="underline" />
+                </div>
+              </div>}
+              <button type="button" className="btn-ghost mt-4 w-full" onClick={() => void generateOne(index)} disabled={pending !== null}>
+                {pending === index ? "Requesting…" : hasImage ? `Request replacement ${index + 1}` : `Request pilot image ${index + 1}`}
+              </button>
+            </section>
+          );
+        })}
       </div>
-      <p className="text-[10px] text-ink-muted/60">~40–60 seconds</p>
-    </div>
+      <ExportBrief brief={brief} mode="account" labels={slots.flatMap((concept, index) => concept?.image_url ? [`Direction ${index + 1}: ${concept.meta?.variant || LABELS[index]} (AI-assisted; image not included)`] : [])} />
+    </>
   );
 }

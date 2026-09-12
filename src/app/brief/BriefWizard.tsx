@@ -1,250 +1,158 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { emptyBrief, BriefDraft, STYLES, PLACEMENTS, SIZES, PALETTES } from "@/lib/brief";
+import type { BriefDraft } from "@/lib/brief";
+import BriefFields, { BriefProgress, ValidationSummary } from "@/components/BriefFields";
+import { draftFrom, firstErrorStep, trimmedBrief, validateBrief, type BriefErrors } from "@/components/brief-validation";
+import { generationError } from "@/components/pilot-client";
+import { EarlyAccessLink, PilotLinks } from "@/components/PilotLinks";
+import ExportBrief from "@/components/ExportBrief";
 
-type Props = { initial: any | null; userEmail: string };
+type Props = { initial: (Partial<BriefDraft> & { id: string }) | null; userEmail: string };
 
 export default function BriefWizard({ initial, userEmail }: Props) {
   const router = useRouter();
+  // A stable ID is reused after response loss. A ref + single lock avoid closure races.
+  const idRef = useRef<string | null>(initial?.id ?? null);
+  const lock = useRef(false);
+  const [briefId, setBriefId] = useState(initial?.id ?? null);
   const [step, setStep] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [briefId, setBriefId] = useState<string | null>(initial?.id ?? null);
-  const [brief, setBrief] = useState<BriefDraft>({
-    meaning: initial?.meaning ?? "",
-    placement: initial?.placement ?? "",
-    size_cm: initial?.size_cm ?? "",
-    style: initial?.style ?? "",
-    key_elements: initial?.key_elements ?? "",
-    palette: initial?.palette ?? "",
-    reference_notes: initial?.reference_notes ?? ""
-  });
+  const [brief, setBrief] = useState<BriefDraft>(() => draftFrom(initial));
+  const [busy, setBusy] = useState(false);
+  const [saveState, setSaveState] = useState<"new" | "dirty" | "saving" | "saved" | "error">(initial ? "saved" : "new");
+  const [errors, setErrors] = useState<BriefErrors>({});
+  const [error, setError] = useState("");
+  const [generationStatus, setGenerationStatus] = useState<number | null>(null);
 
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-
-  // autosave on change
   useEffect(() => {
-    const t = setTimeout(() => save(false), 1200);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brief]);
-
-  async function save(showState = true) {
-    if (showState) setSaving(true);
-    const payload = { ...brief, brief: brief, status: "draft" as const };
-    if (briefId) {
-      await supabase.from("briefs").update(payload).eq("id", briefId);
-    } else {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from("briefs")
-        .insert({ ...payload, user_id: user.id })
-        .select("id")
-        .single();
-      if (data?.id) setBriefId(data.id);
+    function warn(event: BeforeUnloadEvent) {
+      if (saveState === "dirty" || saveState === "saving" || saveState === "error") { event.preventDefault(); event.returnValue = ""; }
     }
-    if (showState) setSaving(false);
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [saveState]);
+
+  function change(key: keyof BriefDraft, value: string) {
+    setBrief((current) => ({ ...current, [key]: value }));
+    setSaveState("dirty");
+    setErrors({});
+    setError("");
+    setGenerationStatus(null);
   }
 
-  async function submitAndGenerate() {
-    setSaving(true);
-    await save(false);
-    // Mark submitted, request generation
-    if (briefId) {
-      await supabase.from("briefs").update({ status: "submitted" }).eq("id", briefId);
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ brief_id: briefId })
-      });
-      if (res.ok) {
-        router.push(`/concepts/${briefId}`);
+  async function save(snapshot: BriefDraft): Promise<string> {
+    setSaveState("saving");
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error("Your session could not be verified. Sign in again before saving. Your text is still on this page.");
+      if (!idRef.current) idRef.current = crypto.randomUUID();
+      const id = idRef.current;
+      const payload = { ...snapshot, brief: snapshot, status: "draft" };
+      // Do not upsert id/user_id: the pilot grants intentionally forbid updating
+      // ownership columns. Checking a stable ID also recovers a lost insert response.
+      const { data: existing, error: lookupError } = await supabase.from("briefs")
+        .select("id").eq("id", id).eq("user_id", user.id).maybeSingle();
+      if (lookupError) throw new Error("The brief could not be saved to your account. Your text is still here. Check your connection and try Save again, or export a copy.");
+      const result = existing
+        ? await supabase.from("briefs").update(payload).eq("id", id).eq("user_id", user.id).select("id").single()
+        : await supabase.from("briefs").insert({ id, user_id: user.id, ...payload }).select("id").single();
+      const { data, error: saveError } = result;
+      if (saveError || !data?.id || data.id !== id) throw new Error("The brief could not be saved to your account. Your text is still here. Check your connection and try Save again, or export a copy.");
+      setBriefId(id);
+      setBrief(snapshot);
+      setSaveState("saved");
+      return id;
+    } catch (cause) {
+      setSaveState("error");
+      throw cause;
+    }
+  }
+
+  async function submit(openConcepts: boolean, advance: boolean) {
+    if (lock.current) return;
+    const found = validateBrief(brief, step);
+    setErrors(found);
+    if (Object.keys(found).length) {
+      if (step === 4) {
+        const first = firstErrorStep(found);
+        if (first >= 0) setStep(first);
+      }
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    setGenerationStatus(null);
+    let saved = false;
+    try {
+      const id = await save(trimmedBrief(brief));
+      saved = true;
+      if (openConcepts) {
+        // Preparation is not image generation; images need explicit actions on the next page.
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brief_id: id }),
+        });
+        if (!response.ok) {
+          setGenerationStatus(response.status);
+          setError(generationError(response.status));
+          return;
+        }
+        router.push(`/concepts/${encodeURIComponent(id)}`);
         return;
       }
+      if (advance) setStep((value) => Math.min(4, value + 1));
+    } catch (cause) {
+      setError(cause instanceof Error && (cause.message.startsWith("Your session") || cause.message.startsWith("The brief could not")) ? cause.message :
+        saved
+          ? "The pilot request could not be confirmed. Your brief is saved. Check your connection, then try again."
+          : "We could not confirm the save or pilot request. Stay on this page and try again, or export a copy. No further navigation has occurred.");
+    } finally {
+      lock.current = false;
+      setBusy(false);
     }
-    setSaving(false);
   }
-
-  const steps = [
-    { key: "meaning", label: "Meaning" },
-    { key: "placement", label: "Placement & size" },
-    { key: "style", label: "Style" },
-    { key: "key_elements", label: "Elements" },
-    { key: "review", label: "Review" }
-  ];
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
-      <header className="mb-8 flex items-center justify-between">
-        <Link href="/" className="text-sm text-ink-muted hover:text-white">← InkStory</Link>
-        <div className="text-xs text-ink-muted">
-          {userEmail} · {saving ? "Saving…" : "Saved"}
-        </div>
+      <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
+        <Link href="/dashboard" className="py-3 text-sm text-ink-muted hover:text-white">← My briefs</Link>
+        <p className="min-w-0 break-words text-sm text-ink-muted">{userEmail}</p>
       </header>
-
-      <div className="mb-6 flex items-center gap-2">
-        {steps.map((s, i) => (
-          <div key={s.key} className="flex flex-1 items-center gap-2">
-            <div
-              className={`h-1 flex-1 rounded-full ${i <= step ? "bg-accent" : "bg-ink-ring"}`}
-              aria-hidden
-            />
+      <BriefProgress step={step} />
+      <p role="status" className="mt-3 text-sm text-accent-soft">
+        {saveState === "new" ? "Not saved yet. Save each step to keep it in your account." :
+          saveState === "dirty" ? "Unsaved changes. Save before leaving this page." :
+          saveState === "saving" ? "Saving to your account…" :
+          saveState === "error" ? "Save not confirmed. Your edits are still on this page." : "Saved to your account."}
+      </p>
+      <p className="mt-2 text-sm text-ink-muted">Account briefs are stored with Supabase. Image generation sends your brief to OpenAI only when requested and available to your invited account. Avoid sensitive details. <Link href="/privacy" className="text-accent underline">Read about data handling</Link>.</p>
+      <form noValidate onSubmit={(event) => { event.preventDefault(); void submit(step === 4, step < 4); }}>
+        <ValidationSummary errors={errors} />
+        <BriefFields step={step} brief={brief} errors={errors} onChange={change} disabled={busy} />
+        {step === 4 && <p className="mt-4 text-sm text-ink-muted">The account pilot is invitation-only and quota-limited. Opening concepts checks access; each image needs a separate generation request on the next page. You can save or export your brief without image access.</p>}
+        {error && <div role="alert" className="mt-5 rounded-xl border border-red-400/40 p-4 text-sm text-red-200">
+          <p>{error}</p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Link href={`/auth/login?next=${encodeURIComponent(briefId ? `/brief?id=${briefId}` : "/brief")}`} className="underline">Sign in again</Link>
+            {(generationStatus === 403 || generationStatus === 429 || generationStatus === 503) && <EarlyAccessLink className="underline" />}
           </div>
-        ))}
-      </div>
-      <h1 className="font-display text-3xl">{steps[step].label}</h1>
-
-      <div className="mt-6">
-        {step === 0 && (
-          <div className="space-y-3">
-            <p className="text-sm text-ink-muted">
-              What is this piece meant to carry? Think meaning, story, or the moment it marks.
-            </p>
-            <textarea
-              className="textarea"
-              placeholder="e.g. Marks the year I rebuilt my life after loss. The wolf represents the guide I found in myself."
-              value={brief.meaning}
-              onChange={(e) => setBrief({ ...brief, meaning: e.target.value })}
-            />
+        </div>}
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+          <button className="btn-ghost" type="button" disabled={step === 0 || busy} onClick={() => { setStep((value) => Math.max(0, value - 1)); setErrors({}); }}>Back</button>
+          <div className="flex flex-wrap gap-3">
+            {step === 4 && <button className="btn-ghost" type="button" disabled={busy} onClick={() => void submit(false, false)}>Save brief only</button>}
+            <button className="btn-primary" type="submit" disabled={busy}>{busy ? "Working…" : step === 4 ? "Save & open pilot concepts" : "Save & continue"}</button>
           </div>
-        )}
-        {step === 1 && (
-          <div className="space-y-6">
-            <div>
-              <p className="text-sm text-ink-muted">Where on the body?</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {PLACEMENTS.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    className={`chip ${brief.placement === p ? "chip-active" : ""}`}
-                    onClick={() => setBrief({ ...brief, placement: p })}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-ink-muted">Approximate size</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {SIZES.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`chip ${brief.size_cm === s ? "chip-active" : ""}`}
-                    onClick={() => setBrief({ ...brief, size_cm: s })}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-        {step === 2 && (
-          <div className="space-y-6">
-            <div>
-              <p className="text-sm text-ink-muted">Style</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {STYLES.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`chip ${brief.style === s ? "chip-active" : ""}`}
-                    onClick={() => setBrief({ ...brief, style: s })}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-ink-muted">Palette</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {PALETTES.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    className={`chip ${brief.palette === p ? "chip-active" : ""}`}
-                    onClick={() => setBrief({ ...brief, palette: p })}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-        {step === 3 && (
-          <div className="space-y-3">
-            <p className="text-sm text-ink-muted">
-              Key elements that must appear (comma-separated). Anything you already know you want in the piece.
-            </p>
-            <input
-              className="input"
-              placeholder="e.g. wolf, runes, longship, mountains"
-              value={brief.key_elements}
-              onChange={(e) => setBrief({ ...brief, key_elements: e.target.value })}
-            />
-            <p className="mt-4 text-sm text-ink-muted">Any references, artist inspiration, or notes?</p>
-            <textarea
-              className="textarea"
-              placeholder="e.g. Inspired by Kai Prusa's fine-line, but bolder. No colour."
-              value={brief.reference_notes}
-              onChange={(e) => setBrief({ ...brief, reference_notes: e.target.value })}
-            />
-          </div>
-        )}
-        {step === 4 && (
-          <div className="space-y-3">
-            <div className="card space-y-3">
-              <Row k="Meaning" v={brief.meaning || "—"} />
-              <Row k="Placement" v={brief.placement || "—"} />
-              <Row k="Size" v={brief.size_cm || "—"} />
-              <Row k="Style" v={brief.style || "—"} />
-              <Row k="Palette" v={brief.palette || "—"} />
-              <Row k="Elements" v={brief.key_elements || "—"} />
-              <Row k="Notes" v={brief.reference_notes || "—"} />
-            </div>
-            <p className="text-sm text-ink-muted">
-              Ready when you are. This will generate three concept directions from your brief. It usually takes 20–40 seconds.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-10 flex items-center justify-between">
-        <button
-          className="btn-ghost"
-          onClick={() => setStep(Math.max(0, step - 1))}
-          disabled={step === 0}
-        >
-          Back
-        </button>
-        {step < steps.length - 1 ? (
-          <button className="btn-primary" onClick={() => setStep(step + 1)}>
-            Continue
-          </button>
-        ) : (
-          <button className="btn-primary" onClick={submitAndGenerate} disabled={saving}>
-            {saving ? "Working…" : "Generate concepts"}
-          </button>
-        )}
-      </div>
+        </div>
+      </form>
+      {(step === 4 || !!error) && <ExportBrief brief={brief} mode="account" />}
+      <PilotLinks />
     </main>
-  );
-}
-
-function Row({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex justify-between gap-6 text-sm">
-      <span className="text-ink-muted">{k}</span>
-      <span className="max-w-[70%] text-right text-white">{v}</span>
-    </div>
   );
 }

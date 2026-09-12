@@ -1,250 +1,113 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { STYLES, PLACEMENTS, SIZES, PALETTES } from "@/lib/brief";
-import {
-  activateDemo,
-  createDemoBrief,
-  generateDemoConcepts,
-  getDemoBrief,
-  updateDemoBrief,
-  type DemoBrief
-} from "@/lib/demo";
+import type { BriefDraft } from "@/lib/brief";
+import { createDemoBrief, getDemoBrief, updateDemoBrief } from "@/lib/demo";
+import BriefFields, { BriefProgress, ValidationSummary } from "@/components/BriefFields";
+import { draftFrom, firstErrorStep, trimmedBrief, validateBrief, type BriefErrors } from "@/components/brief-validation";
+import DemoStorageNotice from "@/components/DemoStorageNotice";
+import ExportBrief from "@/components/ExportBrief";
+import { PilotLinks } from "@/components/PilotLinks";
 
 export default function DemoBriefWizard() {
   const router = useRouter();
   const params = useSearchParams();
   const initialId = params.get("id");
-
+  const idRef = useRef<string | null>(null);
+  const busy = useRef(false);
   const [ready, setReady] = useState(false);
+  const [missing, setMissing] = useState(false);
   const [step, setStep] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [briefId, setBriefId] = useState<string | null>(null);
-  const [brief, setBrief] = useState({
-    meaning: "",
-    placement: "",
-    size_cm: "",
-    style: "",
-    key_elements: "",
-    palette: "",
-    reference_notes: ""
-  });
+  const [brief, setBrief] = useState<BriefDraft>(() => draftFrom());
+  const [errors, setErrors] = useState<BriefErrors>({});
+  const [saveError, setSaveError] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [revision, setRevision] = useState(0);
 
-  // Bootstrap: activate demo mode, load existing brief or create a fresh one.
   useEffect(() => {
-    activateDemo();
-    let existing: DemoBrief | null = initialId ? getDemoBrief(initialId) : null;
-    if (!existing) existing = createDemoBrief();
-    setBriefId(existing.id);
-    setBrief({
-      meaning: existing.meaning ?? "",
-      placement: existing.placement ?? "",
-      size_cm: existing.size_cm ?? "",
-      style: existing.style ?? "",
-      key_elements: existing.key_elements ?? "",
-      palette: existing.palette ?? "",
-      reference_notes: existing.reference_notes ?? ""
-    });
+    const existing = initialId ? getDemoBrief(initialId) : null;
+    idRef.current = existing?.id ?? null;
+    setBrief(draftFrom(existing));
+    setMissing(!!initialId && !existing);
+    setStep(0);
+    setDirty(false);
     setReady(true);
   }, [initialId]);
 
-  // Autosave to localStorage.
   useEffect(() => {
-    if (!ready || !briefId) return;
-    const t = setTimeout(() => {
-      updateDemoBrief(briefId, brief);
-    }, 400);
-    return () => clearTimeout(t);
-  }, [brief, briefId, ready]);
+    const warn = (event: BeforeUnloadEvent) => { if (dirty) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
-  function submitAndGenerate() {
-    if (!briefId) return;
-    setSaving(true);
-    updateDemoBrief(briefId, brief);
-    generateDemoConcepts(briefId);
-    router.push(`/demo/concepts/${briefId}`);
+  function change(key: keyof BriefDraft, value: string) {
+    setBrief((current) => ({ ...current, [key]: value }));
+    setDirty(true);
+    setSaveError("");
+    setErrors({});
   }
 
-  const steps = [
-    { key: "meaning", label: "Meaning" },
-    { key: "placement", label: "Placement & size" },
-    { key: "style", label: "Style" },
-    { key: "key_elements", label: "Elements" },
-    { key: "review", label: "Review" }
-  ];
+  function next() {
+    if (busy.current) return;
+    const found = validateBrief(brief, step);
+    setErrors(found);
+    if (Object.keys(found).length) {
+      if (step === 4) {
+        const first = firstErrorStep(found);
+        if (first >= 0) setStep(first);
+      }
+      return;
+    }
+    busy.current = true;
+    try {
+      const draft = trimmedBrief(brief);
+      if (!idRef.current) idRef.current = createDemoBrief(draft).id;
+      const saved = updateDemoBrief(idRef.current, { ...draft, status: step === 4 ? "reviewed" : "draft" });
+      if (!saved) throw new Error("Missing brief");
+      setBrief(draft);
+      setDirty(false);
+      setRevision((value) => value + 1);
+      if (step === 4) router.push(`/demo/concepts/${encodeURIComponent(idRef.current)}`);
+      else setStep((value) => value + 1);
+    } catch {
+      setSaveError("We could not keep this draft. Your text is still on this page. Export a copy before starting a new brief.");
+    } finally {
+      busy.current = false;
+    }
+  }
 
-  if (!ready) return null;
+  if (!ready) return <main className="mx-auto max-w-3xl px-6 py-10"><p role="status">Opening local brief…</p></main>;
+  if (missing) return (
+    <main className="mx-auto max-w-3xl px-6 py-16">
+      <h1 className="font-display text-3xl">Local brief not found</h1>
+      <p className="mt-3 text-ink-muted">It may have been cleared or kept only in memory in another preview. Local briefs are not restored from an account.</p>
+      <Link href="/demo/brief" className="btn-primary mt-6">Start a new local brief</Link>
+      <PilotLinks />
+    </main>
+  );
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
-      <header className="mb-8 flex items-center justify-between">
-        <Link href="/" className="text-sm text-ink-muted hover:text-white">← InkStory</Link>
-        <div className="text-xs text-ink-muted">
-          Demo mode · {saving ? "Saving…" : "Saved locally"}
-        </div>
+      <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
+        <Link href="/demo/dashboard" className="py-3 text-sm text-ink-muted hover:text-white">← Local briefs</Link>
+        <span className="pill">Local layout demo · No AI generation</span>
       </header>
-
-      <div className="mb-6 flex items-center gap-2">
-        {steps.map((s, i) => (
-          <div key={s.key} className="flex flex-1 items-center gap-2">
-            <div
-              className={`h-1 flex-1 rounded-full ${i <= step ? "bg-accent" : "bg-ink-ring"}`}
-              aria-hidden
-            />
-          </div>
-        ))}
-      </div>
-      <h1 className="font-display text-3xl">{steps[step].label}</h1>
-
-      <div className="mt-6">
-        {step === 0 && (
-          <div className="space-y-3">
-            <p className="text-sm text-ink-muted">
-              What is this piece meant to carry? Think meaning, story, or the moment it marks.
-            </p>
-            <textarea
-              className="textarea"
-              placeholder="e.g. Marks the year I rebuilt my life after loss. The wolf represents the guide I found in myself."
-              value={brief.meaning}
-              onChange={(e) => setBrief({ ...brief, meaning: e.target.value })}
-            />
-          </div>
-        )}
-        {step === 1 && (
-          <div className="space-y-6">
-            <div>
-              <p className="text-sm text-ink-muted">Where on the body?</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {PLACEMENTS.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    className={`chip ${brief.placement === p ? "chip-active" : ""}`}
-                    onClick={() => setBrief({ ...brief, placement: p })}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-ink-muted">Approximate size</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {SIZES.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`chip ${brief.size_cm === s ? "chip-active" : ""}`}
-                    onClick={() => setBrief({ ...brief, size_cm: s })}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-        {step === 2 && (
-          <div className="space-y-6">
-            <div>
-              <p className="text-sm text-ink-muted">Style</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {STYLES.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`chip ${brief.style === s ? "chip-active" : ""}`}
-                    onClick={() => setBrief({ ...brief, style: s })}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-ink-muted">Palette</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {PALETTES.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    className={`chip ${brief.palette === p ? "chip-active" : ""}`}
-                    onClick={() => setBrief({ ...brief, palette: p })}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-        {step === 3 && (
-          <div className="space-y-3">
-            <p className="text-sm text-ink-muted">
-              Key elements that must appear (comma-separated). Anything you already know you want in the piece.
-            </p>
-            <input
-              className="input"
-              placeholder="e.g. wolf, runes, longship, mountains"
-              value={brief.key_elements}
-              onChange={(e) => setBrief({ ...brief, key_elements: e.target.value })}
-            />
-            <p className="mt-4 text-sm text-ink-muted">Any references, artist inspiration, or notes?</p>
-            <textarea
-              className="textarea"
-              placeholder="e.g. Inspired by Kai Prusa's fine-line, but bolder. No colour."
-              value={brief.reference_notes}
-              onChange={(e) => setBrief({ ...brief, reference_notes: e.target.value })}
-            />
-          </div>
-        )}
-        {step === 4 && (
-          <div className="space-y-3">
-            <div className="card space-y-3">
-              <Row k="Meaning" v={brief.meaning || "—"} />
-              <Row k="Placement" v={brief.placement || "—"} />
-              <Row k="Size" v={brief.size_cm || "—"} />
-              <Row k="Style" v={brief.style || "—"} />
-              <Row k="Palette" v={brief.palette || "—"} />
-              <Row k="Elements" v={brief.key_elements || "—"} />
-              <Row k="Notes" v={brief.reference_notes || "—"} />
-            </div>
-            <p className="text-sm text-ink-muted">
-              Demo mode: three concept directions will be generated instantly from your brief and shown on the next screen.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-10 flex items-center justify-between">
-        <button
-          className="btn-ghost"
-          onClick={() => setStep(Math.max(0, step - 1))}
-          disabled={step === 0}
-        >
-          Back
-        </button>
-        {step < steps.length - 1 ? (
-          <button className="btn-primary" onClick={() => setStep(step + 1)}>
-            Continue
-          </button>
-        ) : (
-          <button className="btn-primary" onClick={submitAndGenerate} disabled={saving}>
-            {saving ? "Working…" : "Generate concepts"}
-          </button>
-        )}
-      </div>
+      <BriefProgress step={step} />
+      <DemoStorageNotice revision={revision} unsaved={dirty} />
+      <form noValidate onSubmit={(event) => { event.preventDefault(); next(); }}>
+        <ValidationSummary errors={errors} />
+        <BriefFields step={step} brief={brief} errors={errors} onChange={change} />
+        {step === 4 && <p className="mt-4 text-sm text-ink-muted">Next, compare three fixed abstract layouts alongside your captured brief. They are the same examples for everyone, not personalised tattoo designs. No story is sent for AI generation.</p>}
+        {saveError && <p role="alert" className="mt-4 text-sm text-red-200">{saveError}</p>}
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+          <button type="button" className="btn-ghost" disabled={step === 0} onClick={() => { setStep((value) => Math.max(0, value - 1)); setErrors({}); }}>Back</button>
+          <button className="btn-primary" type="submit">{step === 4 ? "View example layouts" : "Save locally & continue"}</button>
+        </div>
+      </form>
+      {step === 4 && <ExportBrief brief={brief} mode="demo" />}
+      <PilotLinks />
     </main>
-  );
-}
-
-function Row({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex justify-between gap-6 text-sm">
-      <span className="text-ink-muted">{k}</span>
-      <span className="max-w-[70%] text-right text-white">{v}</span>
-    </div>
   );
 }

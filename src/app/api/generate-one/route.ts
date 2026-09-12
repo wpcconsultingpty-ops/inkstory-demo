@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { buildPrompt } from "@/lib/brief";
 import { buildTattooPrompt, generateTattooImage } from "@/lib/openai-image";
+import {
+  RequestError, conceptImageUrl, decodeRasterBase64, readJsonObject,
+  validateBrief, validateDirectionIndex, validateUUID
+} from "@/lib/security";
+import { apiFailure, ownedBrief, pilotContext, rpcError } from "@/lib/pilot-server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -9,107 +13,71 @@ export const maxDuration = 60;
 const STYLE_VARIANTS = [
   {
     label: "Considered & minimal",
-    detail:
-      "generous negative space, single focal element, quiet composition, refined single-needle line work with subtle whip-shaded highlights"
+    detail: "generous negative space, single focal element, quiet composition, refined single-needle line work with subtle whip-shaded highlights"
   },
   {
     label: "Balanced & symbolic",
-    detail:
-      "focal motif framed by two supporting elements, mirrored symmetry, dot-work stippling in shadow areas, medium line weights"
+    detail: "focal motif framed by two supporting elements, mirrored symmetry, dot-work stippling in shadow areas, medium line weights"
   },
   {
     label: "Dynamic & story-forward",
-    detail:
-      "sense of movement, layered background texture, storytelling emphasis, bold heavy outlines with fine hatching detail, high tonal contrast"
+    detail: "sense of movement, layered background texture, storytelling emphasis, bold heavy outlines with fine hatching detail, high tonal contrast"
   }
 ];
 
-async function uploadImage(
-  supa: any,
-  userId: string,
-  briefId: string,
-  idx: number,
-  b64: string
-): Promise<string | null> {
-  const buf = Buffer.from(b64, "base64");
-  const path = `${userId}/${briefId}/direction-${idx + 1}.png`;
-  const { error } = await supa.storage.from("concepts").upload(path, buf, {
-    contentType: "image/png",
-    upsert: true
-  });
-  if (error) {
-    console.error("[storage upload]", error.message);
-    return null;
-  }
-  const { data } = supa.storage.from("concepts").getPublicUrl(path);
-  return data?.publicUrl ?? null;
-}
-
 export async function POST(req: Request) {
-  const { brief_id, idx } = await req.json();
-  if (!brief_id || typeof idx !== "number")
-    return NextResponse.json({ error: "brief_id and idx required" }, { status: 400 });
-  if (idx < 0 || idx >= STYLE_VARIANTS.length)
-    return NextResponse.json({ error: "idx out of range" }, { status: 400 });
+  let release: (() => Promise<void>) | undefined;
+  try {
+    const body = await readJsonObject(req);
+    const briefId = validateUUID(body.brief_id);
+    const idx = validateDirectionIndex(body.idx);
+    const { supa, user } = await pilotContext();
+    await ownedBrief(supa, user.id, briefId);
+    if (!process.env.OPENAI_API_KEY) throw new RequestError(503, "Image generation is unavailable.");
 
-  const supa = createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supa.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    // The RPC locks the singleton config row, checks ownership/invite/quotas,
+    // issues a same-slot lease and charges BEFORE any provider call.
+    const { data: reservation, error: reserveError } = await supa.rpc("pilot_reserve_generation", {
+      p_brief_id: briefId, p_idx: idx
+    });
+    if (reserveError) rpcError(reserveError);
+    if (!reservation || typeof reservation !== "object") rpcError(null);
+    const reservationId = validateUUID(reservation.reservation_id, "reservation id");
+    const path = `${user.id}/${briefId}/${reservationId}.png`;
+    release = async () => {
+      // Failure status releases only the slot; the rolling spend charge remains.
+      const { error } = await supa.rpc("pilot_fail_generation", { p_reservation_id: reservationId });
+      if (error) console.error("[pilot] Unable to release reservation; lease will expire.");
+    };
+    const brief = validateBrief(reservation.brief);
+    const variant = STYLE_VARIANTS[idx];
+    const prompt = buildTattooPrompt(buildPrompt(brief), variant, idx);
+    const generated = await generateTattooImage(prompt, { size: "1024x1024", quality: "low" });
+    const bytes = decodeRasterBase64(generated.b64, "image/png");
+    const { error: uploadError } = await supa.storage.from("concepts").upload(path, bytes, {
+      contentType: "image/png", upsert: false, cacheControl: "0"
+    });
+    if (uploadError) throw new RequestError(503, "Unable to save the image. Existing artwork has not been changed.");
 
-  const { data: brief, error } = await supa
-    .from("briefs")
-    .select("*")
-    .eq("id", brief_id)
-    .single();
-  if (error || !brief) return NextResponse.json({ error: "brief not found" }, { status: 404 });
-
-  const variant = STYLE_VARIANTS[idx];
-  const basePrompt = buildPrompt(brief as any);
-  const prompt = buildTattooPrompt(basePrompt, variant, idx);
-
-  const gen = await generateTattooImage(prompt, { size: "1024x1024", quality: "high" });
-
-  let image_url: string | null = null;
-  const meta: Record<string, unknown> = { variant: variant.label, detail: variant.detail };
-
-  if (gen) {
-    const uploaded = await uploadImage(supa, user.id, brief_id, idx, gen.b64);
-    if (uploaded) {
-      image_url = uploaded;
-      meta.model = gen.model;
-      meta.size = gen.size;
-      meta.quality = "high";
-    } else {
-      image_url = `data:image/png;base64,${gen.b64}`;
-      meta.model = gen.model;
-      meta.upload_failed = true;
+    // Only this owned, unexpired reservation's uploaded object can be saved.
+    // Existing artwork is replaced atomically on success, never deleted first.
+    const { data: concept, error: saveError } = await supa.rpc("pilot_complete_generation", {
+      p_reservation_id: reservationId,
+      p_prompt: prompt,
+      p_meta: { variant: variant.label, detail: variant.detail, model: generated.model, size: generated.size, quality: "low" }
+    });
+    if (saveError) rpcError(saveError);
+    if (!concept || typeof concept !== "object" || !concept.id || !concept.image_url) rpcError(null);
+    const imageUrl = conceptImageUrl(concept.id);
+    release = undefined;
+    return NextResponse.json(
+      { concept: { ...concept, image_url: imageUrl, thumbnail_url: imageUrl } },
+      { headers: { "Cache-Control": "no-store" } }
+    );
+  } catch (error) {
+    if (release) {
+      try { await release(); } catch { /* Still charged; the durable lease expires. */ }
     }
-  } else {
-    meta.error = "generation_failed";
+    return apiFailure(error);
   }
-
-  // Upsert the concept row (delete any old row at this idx first)
-  await supa.from("concepts").delete().eq("brief_id", brief_id).eq("idx", idx);
-
-  const row = {
-    brief_id,
-    user_id: user.id,
-    idx,
-    prompt,
-    image_url,
-    meta
-  };
-  const { data: inserted, error: insertErr } = await supa
-    .from("concepts")
-    .insert(row)
-    .select("*")
-    .single();
-
-  if (insertErr) {
-    return NextResponse.json({ error: insertErr.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ concept: inserted });
 }
