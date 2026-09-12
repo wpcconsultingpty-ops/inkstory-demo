@@ -1,4 +1,12 @@
 /** @type {import('next').NextConfig} */
+if (process.env.NEXT_PUBLIC_INKSTORY_ENVIRONMENT === "staging") {
+  const ref = process.env.NEXT_PUBLIC_INKSTORY_STAGING_REF;
+  if (!ref || ref === "yawmspiblfzzsosyeboc" ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL !== `https://${ref}.supabase.co` ||
+      process.env.INKSTORY_GENERATION_ENABLED !== "false") {
+    throw new Error("Staging must use an isolated database and disabled generation.");
+  }
+}
 const nextConfig = {
   reactStrictMode: true,
   distDir: process.env.INKSTORY_BUILD_DIR || ".next",
@@ -12,7 +20,10 @@ const nextConfig = {
       headers: [
         { key: "X-Content-Type-Options", value: "nosniff" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-        { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" }
+        { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ...(process.env.NEXT_PUBLIC_INKSTORY_ENVIRONMENT === "staging"
+          ? [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }]
+          : [])
       ]
     }];
   }
