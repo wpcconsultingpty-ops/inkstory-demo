@@ -7,8 +7,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { BriefDraft } from "@/lib/brief";
 import BriefFields, { BriefProgress, ValidationSummary } from "@/components/BriefFields";
 import { draftFrom, firstErrorStep, trimmedBrief, validateBrief, type BriefErrors } from "@/components/brief-validation";
-import { generationError } from "@/components/pilot-client";
-import { EarlyAccessLink, PilotLinks } from "@/components/PilotLinks";
+import { PilotLinks } from "@/components/PilotLinks";
 import ExportBrief from "@/components/ExportBrief";
 
 type Props = { initial: (Partial<BriefDraft> & { id: string }) | null; userEmail: string };
@@ -25,7 +24,6 @@ export default function BriefWizard({ initial, userEmail }: Props) {
   const [saveState, setSaveState] = useState<"new" | "dirty" | "saving" | "saved" | "error">(initial ? "saved" : "new");
   const [errors, setErrors] = useState<BriefErrors>({});
   const [error, setError] = useState("");
-  const [generationStatus, setGenerationStatus] = useState<number | null>(null);
 
   useEffect(() => {
     function warn(event: BeforeUnloadEvent) {
@@ -40,7 +38,6 @@ export default function BriefWizard({ initial, userEmail }: Props) {
     setSaveState("dirty");
     setErrors({});
     setError("");
-    setGenerationStatus(null);
   }
 
   async function save(snapshot: BriefDraft): Promise<string> {
@@ -86,23 +83,13 @@ export default function BriefWizard({ initial, userEmail }: Props) {
     lock.current = true;
     setBusy(true);
     setError("");
-    setGenerationStatus(null);
     let saved = false;
     try {
       const id = await save(trimmedBrief(brief));
       saved = true;
       if (openConcepts) {
-        // Preparation is not image generation; images need explicit actions on the next page.
-        const response = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brief_id: id }),
-        });
-        if (!response.ok) {
-          setGenerationStatus(response.status);
-          setError(generationError(response.status));
-          return;
-        }
+        // Saving only opens the owner-only review. Generation gates are checked
+        // by the explicit per-image request, not by navigation.
         router.push(`/concepts/${encodeURIComponent(id)}`);
         return;
       }
@@ -110,8 +97,8 @@ export default function BriefWizard({ initial, userEmail }: Props) {
     } catch (cause) {
       setError(cause instanceof Error && (cause.message.startsWith("Your session") || cause.message.startsWith("The brief could not")) ? cause.message :
         saved
-          ? "The pilot request could not be confirmed. Your brief is saved. Check your connection, then try again."
-          : "We could not confirm the save or pilot request. Stay on this page and try again, or export a copy. No further navigation has occurred.");
+          ? "Your brief is saved, but the review page could not be opened. Check your connection, then open it again."
+          : "We could not confirm the save. Stay on this page and try again, or export a copy. No further navigation has occurred.");
     } finally {
       lock.current = false;
       setBusy(false);
@@ -135,19 +122,18 @@ export default function BriefWizard({ initial, userEmail }: Props) {
       <form noValidate onSubmit={(event) => { event.preventDefault(); void submit(step === 4, step < 4); }}>
         <ValidationSummary errors={errors} />
         <BriefFields step={step} brief={brief} errors={errors} onChange={change} disabled={busy} />
-        {step === 4 && <p className="mt-4 text-sm text-ink-muted">The account pilot is invitation-only and quota-limited. Opening concepts checks access; each image needs a separate generation request on the next page. You can save or export your brief without image access.</p>}
+        {step === 4 && <p className="mt-4 text-sm text-ink-muted">Save and open a review of composition directions and output formats. No image is generated yet. Each image needs a separate confirmation on the next page; generation remains invitation-only and allowance-limited. You can save or export without image access.</p>}
         {error && <div role="alert" className="mt-5 rounded-xl border border-red-400/40 p-4 text-sm text-red-200">
           <p>{error}</p>
           <div className="mt-3 flex flex-wrap gap-3">
             <Link href={`/auth/login?next=${encodeURIComponent(briefId ? `/brief?id=${briefId}` : "/brief")}`} className="underline">Sign in again</Link>
-            {(generationStatus === 403 || generationStatus === 429 || generationStatus === 503) && <EarlyAccessLink className="underline" />}
           </div>
         </div>}
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
           <button className="btn-ghost" type="button" disabled={step === 0 || busy} onClick={() => { setStep((value) => Math.max(0, value - 1)); setErrors({}); }}>Back</button>
           <div className="flex flex-wrap gap-3">
             {step === 4 && <button className="btn-ghost" type="button" disabled={busy} onClick={() => void submit(false, false)}>Save brief only</button>}
-            <button className="btn-primary" type="submit" disabled={busy}>{busy ? "Working…" : step === 4 ? "Save & open pilot concepts" : "Save & continue"}</button>
+            <button className="btn-primary" type="submit" disabled={busy}>{busy ? "Working…" : step === 4 ? "Save & open generation review" : "Save & continue"}</button>
           </div>
         </div>
       </form>

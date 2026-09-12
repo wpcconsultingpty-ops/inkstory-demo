@@ -1,0 +1,173 @@
+# Personalised generation quality
+
+Implementation notes for the generation art-direction upgrade, 12 September 2026.
+
+## Shared frontend/server contract
+
+`src/lib/generation-plan.ts` is browser-safe. It imports only the brief serializer and existing browser-safe validation; it does not import credentials, provider code, gallery assets or server clients.
+
+```ts
+type OutputMode = "on_body" | "artwork";
+
+OUTPUT_MODES // readonly [{ id, label, description }, ...]
+// on_body: On-body mockup
+// artwork: Artwork only
+
+GENERATION_DIRECTIONS // readonly [{ id, label, description }, ...]
+// 0: Focused symbol
+// 1: Balanced composition
+// 2: Immersive narrative
+
+validateOutputMode(value: unknown): OutputMode
+validateGenerationPrompt(value: unknown): string // 1–10000 Unicode code points
+buildGenerationPlan(brief: BriefDraft, idx: number, outputMode: OutputMode)
+// returns {
+//   label, description, outputMode, outputLabel,
+//   size, quality, model, promptVersion, prompt, placementNote, styleNote
+// }
+```
+
+Use these exact shared labels, descriptions and plan notes in the review interface. The server builds the actual prompt from the **reserved database brief snapshot**, not from client-submitted creative data. An unsaved browser preview is not authoritative.
+
+`POST /api/generate-one` accepts only:
+
+```json
+{
+  "brief_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "idx": 0,
+  "output_mode": "on_body"
+}
+```
+
+Omitting `output_mode` defaults to `on_body` for existing callers. Explicit `null`, empty strings, booleans, numbers, unknown values, altered casing and surrounding whitespace return **400**, before authentication, the environment gate or quota reservation. Extra request fields—including `model`, `quality`, `size`, `n`, `prompt`, `brief`, `output_format` and timeout controls—also return **400**. A valid output choice never grants pilot eligibility or bypasses the existing gates.
+
+## Fixed server policy
+
+| Field | Policy |
+| --- | --- |
+| Model | `gpt-image-2.5-flare` |
+| Quality | `high` |
+| Size | `1024x1536` (portrait, for both outputs and all placements) |
+| Format | PNG |
+| Count | `n: 1` |
+| Automatic retries | None |
+| Prompt version | `inkstory-generation-v3` |
+
+The selected model and image-generation parameters use the official OpenAI images generation API contract supplied for this upgrade: [OpenAI — Generate images](https://developers.openai.com/api/reference/resources/images/methods/generate/) (`https://developers.openai.com/api/reference/resources/images/methods/generate/`).
+
+The provider helper does not expose model, quality, image count or size options. Its only option is `expiresAt`, passed from the durable reservation. Requests always use the fixed Flare alias. A returned `model` may be exactly that alias or the documented snapshot `gpt-image-2.5-flare-2026-09-08`; the actual accepted response value is saved. If the response omits `model`, metadata records the requested alias rather than inventing a resolved snapshot. Other model values—including arbitrary dates, nulls and other model families—fail without a retry. The alias and snapshot are documented in [OpenAI — Generate images](https://developers.openai.com/api/reference/resources/images/methods/generate/) (`https://developers.openai.com/api/reference/resources/images/methods/generate/`).
+
+Optional response size, quality and output-format metadata must match the fixed portrait/high/PNG policy. The request never follows provider image URLs or switches to another model.
+
+Completion persists:
+
+```ts
+{
+  variant: plan.label,
+  detail: plan.description,
+  output_mode: plan.outputMode,
+  prompt_version: plan.promptVersion,
+  model: generated.model,
+  size: generated.size,
+  quality: generated.quality
+}
+```
+
+The compiled prompt itself is retained as `p_prompt`. Metadata describes the policy and requested output; it is not a claim that visual fidelity, footer legibility or tattooability has been independently verified.
+
+## Personalisation and art direction
+
+- **Saved data, not a template:** `buildPrompt` serializes only the seven existing `BriefDraft` fields as length-delimited raw text, not escaped JSON. Each header names the field and its Unicode code-point length, followed by the exact field value. Quotes, backslashes, Unicode and line breaks are preserved without expansion. Brief types, options and validation limits are unchanged. The gallery's subjects, colour accents and compositions are not imported or injected.
+- **Exclusions win:** explicit avoidance notes anywhere in the saved brief, especially `reference_notes`, take precedence over conflicting motifs, ornamental conventions and composition suggestions. Exact notes remain in the data block; they are not summarized, shortened or escaped away. If an element is both requested and excluded, the prompt instructs the model to omit it instead of using a stock replacement.
+- **Technique follows style:** all nine existing style choices have their own technique guidance. Directions change hierarchy, arrangement and movement, not the requested art technique. Fine-line, realism, neo-traditional, Irezumi, Norse/runic, illustrative, minimal geometric, watercolour and bold traditional are not all forced into single-needle drawing, bold flash or stippling. Custom styles keep their own described visual language.
+- **Palette is strict:** pigment constraints are independent of the skin/background presentation. A restricted palette overrides style conventions; black-line only does not acquire coloured washes or grey shading.
+- **Size controls complexity:** small sizes and hand/wrist/finger/ankle/ear placements simplify detail—even for the narrative direction or a conflicting XL size. Full sleeves may use connected storytelling zones; a back uses its broader plane without automatically covering the whole back. A portrait canvas is not permission to enlarge a small tattoo.
+- **Symbols and text:** Vegvisir is excluded by default, including for Norse/runic briefs. Inclusion requires an unambiguous explicit positive request and no conflicting exclusion; a reference URL or negative mention is not permission. The prompt forbids fabricated translations, pseudo-runes, invented inscriptions and cultural-authenticity claims. Tattoo text requires exact user-supplied text; the model must not invent or translate it.
+- **Originality:** references describe visual qualities, not an instruction to trace tattoos, reproduce logos/protected characters or copy signature designs. No real-person likeness or identifying feature is requested.
+- **Instruction boundary:** all brief fields are untrusted creative data. Embedded directions to change output, model, labels or safety are explicitly subordinated to the generation policy. Marker-like text inside a field remains data; exact field lengths allow lossless extraction even when a value contains a fake end marker. This is prompt-level defence, not proof that every model output will obey every instruction.
+
+### Database prompt budget: no truncation or paid unsavable result
+
+The existing completion RPC rejects prompts over **10,000 Unicode characters**. Version 3 uses eight compact policy/data sections and does not repeat the full style, placement, size or palette values outside the saved data block. The longer `styleNote` and `placementNote` remain available for frontend review but are not copied verbatim into the provider prompt.
+
+The regression suite proves a conservative upper bound for **any valid 6,000-character saved brief**:
+
+```text
+6,000 maximum saved field characters
+  204 maximum length-header/separator characters
+3,286 maximum policy/presentation characters
+-----
+9,490 maximum prompt characters (< 10,000)
+```
+
+The policy maximum covers **15,840 combinations** across all existing options, custom style/palette fallbacks, sensitive-body fallback, both output modes and all three directions. Observed maxima are **9,485** for option combinations and **9,488** with 120-character custom placement and size fields. Exact round-trip tests cover quotes, backslashes, supplementary Unicode, allowed whitespace and fake data markers; no exclusion is truncated.
+
+`validateGenerationPrompt` remains a separate browser-safe helper, so `buildGenerationPlan` does **not** throw a length error during React rendering. The route explicitly validates the entire compiled prompt from the owned saved brief **before reservation**, and validates the reserved snapshot's freshly compiled prompt again before provider access. Future policy growth or unexpected oversized data therefore produces a readable **400** rather than a paid image that cannot be saved. Preflight overflow performs no reservation or provider call; snapshot overflow sends no provider request and releases the already-counted reservation under the existing no-refund rules.
+
+### On-body mockup
+
+One detailed dark-studio mockup on an anonymous, fictional, unrecognizable adult, cropped to the requested region. Soft directional light and a quiet charcoal background support the tattoo; no costumes, props, jewellery, equipment, scenery or collage. The tattoo follows believable anatomy and surface perspective without losing its foreground motif or chosen art style.
+
+Torso, rib, chest, hip and thigh placements require modest crops and opaque coverage of intimate areas. Front chest explicitly excludes breasts, nipples and nudity. Sensitive or identifying placements—and crops that cannot safely show the requested design—use a smooth, neutral abstract body form without explicit anatomy instead. No child or real person's face is requested.
+
+The exact visible footer **AI CONCEPT MOCKUP** is requested outside the tattoo/body area. It must be inspected in a future visual acceptance test; prompt instructions alone do not establish successful text rendering.
+
+### Artwork only
+
+One isolated finished design on a quiet off-white background, fitted within clear margins and shaped for the requested placement. No skin, mannequin, studio photograph, sketchbook clutter, tools, swatches, scenery or multiple alternatives. No added caption or signature. The selected art style remains intact.
+
+Both modes reject unrealistic microdetail and tiny packed lines. Both are concepts for discussion, not stencils, evidence of real healed tattoos or guarantees of an artist's approval or tattoo safety.
+
+## Lease, spend and storage protections
+
+1. Origin, body, UUID, direction and output/request-key validation run first.
+2. Authentication, explicit environment enablement, owned-brief validation, complete-prompt length preflight and API-key presence remain required.
+3. `pilot_reserve_generation` still checks database eligibility/quotas and durably charges the reservation **before** provider access.
+4. After rebuilding and length-checking the reserved snapshot prompt, immediately before fetch the server computes:
+
+   ```text
+   available_ms = Date.parse(reservation.expires_at) - Date.now() - 30_000
+   provider_timeout_ms = min(180_000, floor(available_ms))
+   ```
+
+   Missing, malformed, timezone-less or expired timestamps fail closed. Less than **45,000 ms** of available provider time also fails with **409**, without sending a provider request. The existing default 300-second lease permits the 180-second provider cap; a fresh minimum 120-second lease permits at most 90 seconds. Network time already consumed after reservation reduces that allowance.
+
+5. Route `maxDuration` is **240 seconds**. The provider timeout leaves a **30-second lease margin** for response validation, private storage upload and atomic completion. This margin is a budget, not a guarantee: delayed storage/completion can still fail, and the database independently rejects expired reservations.
+6. No automatic retry, fallback model or refund path is added. Provider failures, timeouts and post-reservation preflight failures release the slot through `pilot_fail_generation`, but the existing rolling allowance charge remains counted.
+7. Responses must be JSON, contain exactly one base64 PNG result and stay within the existing 12 MiB response-body and **8 MiB decoded image** limits. Existing base64 and PNG-signature checks are preserved; they are not a full raster decoder, dimension verifier or visual-safety classifier.
+8. Upload stays in the private `concepts` bucket with `upsert: false`, under the owned reservation path. The route calls the same atomic `pilot_complete_generation` RPC only after upload. No old image or concept is deleted first; existing database archival replacement behavior is unchanged.
+9. Returned images remain `/api/concept-image/<concept UUID>` with no-store handling, not public bucket links.
+
+No authentication, database schema, migrations, quota values, environment configuration or archive rules are changed by this upgrade.
+
+## Offline verification and release gate
+
+Run with Node 24:
+
+```sh
+export PATH=/home/user/workspace/inkstory-runtime/node_modules/node/bin:$PATH
+npm run typecheck
+npx tsx --test tests/generation-plan.test.ts tests/security.test.ts
+npm test
+```
+
+Results at implementation verification:
+
+- **TypeScript:** passes.
+- **Focused prompt/security tests:** 59 passed, 0 failed.
+- **Full offline suite:** 98 passed, 0 failed after the parallel frontend integration, including its 11 review-interface tests and the existing 16 isolated PostgreSQL migration/RLS/quota/archive tests.
+
+Tests cover every existing style, strict palettes, exact exclusions, no injected gallery motifs, both formats, all placement/size options, safe torso/abstract-body handling, the full prompt-budget bound, lossless maximum-length brief serialization, overflow rejection before reservation and on a changed snapshot, mode validation before auth/gates, fixed provider payload, exact alias/snapshot acceptance with actual model metadata, timeout bounding, invalid/oversized/mismatched responses, no retries, saved-snapshot prompt assembly, reservation ordering, private URLs and non-destructive failure paths. Route orchestration uses the actual route source with narrow offline dependency doubles; it does not prove hosted authentication, network latency or provider success.
+
+**No live OpenAI request, app-provider credential use, environment change, commit, push or deployment was performed in this implementation task.** No claim is made that personalised generation now matches the gallery's visual quality. A separate Computer-rendered prompt sanity check, if performed by the parent task, is not evidence that the hosted OpenAI route works.
+
+Before enabling generation, the release owner should run an explicitly authorized, budgeted end-to-end test through the real disabled-by-default app gates and inspect:
+
+- style preservation and strict exclusions across at least a small-area design and a larger composition;
+- on-body anatomy, coverage, framing, full motif visibility and readable mockup footer;
+- artwork-only separation from skin/mockup presentation;
+- actual provider latency against the returned lease, response size, private upload and completion;
+- saved prompt/metadata, private retrieval and successful archival replacement;
+- unchanged existing art and counted allowance on a controlled failure.
+
+Do not enable staging or production generation merely because offline tests or a separately generated editorial image pass.

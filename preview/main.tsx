@@ -1,4 +1,4 @@
-import React, { useState, type ReactNode } from "react";
+import React, { useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import Landing from "../src/app/page";
 import DemoBriefWizard from "../src/app/demo/DemoBriefWizard";
@@ -8,18 +8,26 @@ import AccountUnavailable from "../src/components/AccountUnavailable";
 import PrivacyPage from "../src/app/privacy/page";
 import PilotPage from "../src/app/pilot/page";
 import GalleryPage from "../src/app/gallery/page";
+import GenerationReviewDemo from "./GenerationReviewDemo";
+import Link from "./link";
 import { Navigation } from "./navigation";
 import "../src/app/globals.css";
 
 function App() {
-  const [route, setRoute] = useState("/");
-  const navigate = (path: string) => { setRoute(path); window.scrollTo(0, 0); };
+  const [route, setRoute] = useState(() => window.location.hash.slice(1) || "/");
+  useEffect(() => {
+    const followHash = () => { setRoute(window.location.hash.slice(1) || "/"); window.scrollTo(0, 0); };
+    window.addEventListener("hashchange", followHash);
+    return () => window.removeEventListener("hashchange", followHash);
+  }, []);
+  const navigate = (path: string) => { setRoute(path); window.location.hash = path; window.scrollTo(0, 0); };
   const path = route.split("?")[0];
   let view: ReactNode;
   if (path === "/") view = <Landing />;
   else if (path === "/privacy") view = <PrivacyPage />;
   else if (path === "/pilot") view = <PilotPage />;
   else if (path === "/gallery") view = <GalleryPage />;
+  else if (path === "/demo/generation-review") view = <GenerationReviewDemo />;
   else if (path === "/demo/brief") view = <DemoBriefWizard />;
   else if (path === "/demo/sample") view = <DemoConceptsView briefId="sample" />;
   else if (path === "/demo/dashboard") view = <DemoDashboard />;
@@ -28,6 +36,10 @@ function App() {
   return <Navigation.Provider value={{ route, navigate }}>
     <div className="border-b border-ink-ring px-5 py-3 text-center text-xs text-ink-muted">
       Isolated preview · Memory-only notes · No account access, AI charges or payments · Production is unchanged
+      <nav aria-label="Isolated preview navigation" className="mt-2 flex flex-wrap justify-center gap-3">
+        <Link href="/" className="py-3 text-accent underline">Preview home</Link>
+        <Link href="/demo/generation-review" className="py-3 text-accent underline" data-testid="link-generation-review-demo">Try generation review (no requests)</Link>
+      </nav>
     </div>
     <div key={route}>{view}</div>
   </Navigation.Provider>;

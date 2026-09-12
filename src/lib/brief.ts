@@ -48,16 +48,17 @@ export const SIZES = ["Small (3–7cm)", "Medium (8–15cm)", "Large (16–25cm)
 export const PALETTES = ["Black and grey", "Black-line only", "Muted colour", "Bold colour", "Watercolour wash"];
 
 export function buildPrompt(b: BriefDraft): string {
-  const parts = [
-    "A refined tattoo concept design, isolated on plain off-white background, high detail, portfolio-quality.",
-    b.style ? `Style: ${b.style}.` : "",
-    b.key_elements ? `Key elements: ${b.key_elements}.` : "",
-    b.meaning ? `Meaning and story: ${b.meaning}.` : "",
-    b.placement ? `Placement: ${b.placement}.` : "",
-    b.size_cm ? `Approximate size: ${b.size_cm}.` : "",
-    b.palette ? `Palette: ${b.palette}.` : "",
-    b.reference_notes ? `References/notes: ${b.reference_notes}.` : "",
-    "Composition is centered, negative space intentional, linework confident, no text, no watermarks, no signature."
-  ];
-  return parts.filter(Boolean).join(" ");
+  // Length-delimited raw text preserves every character without JSON-escape
+  // expansion (6000 quotes/backslashes must not become a 12000-char prompt).
+  // Field lengths count Unicode code points, matching the database. Values
+  // remain untrusted creative data, even when they contain marker-like text.
+  return Object.entries({
+    meaning: b.meaning,
+    placement: b.placement,
+    size_cm: b.size_cm,
+    style: b.style,
+    key_elements: b.key_elements,
+    palette: b.palette,
+    reference_notes: b.reference_notes
+  }).map(([key, value]) => `${key} [${Array.from(value).length} code points]\n${value}`).join("\n");
 }

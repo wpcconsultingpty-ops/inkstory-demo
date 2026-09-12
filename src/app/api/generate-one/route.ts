@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { buildPrompt } from "@/lib/brief";
-import { buildTattooPrompt, generateTattooImage } from "@/lib/openai-image";
+import { buildGenerationPlan, validateGenerationPrompt, validateOutputMode } from "@/lib/generation-plan";
+import { generateTattooImage } from "@/lib/openai-image";
 import {
   RequestError, conceptImageUrl, decodeRasterBase64, readJsonObject,
   validateBrief, validateDirectionIndex, validateUUID
@@ -8,22 +8,7 @@ import {
 import { apiFailure, ownedBrief, pilotContext, rpcError } from "@/lib/pilot-server";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
-
-const STYLE_VARIANTS = [
-  {
-    label: "Considered & minimal",
-    detail: "generous negative space, single focal element, quiet composition, refined single-needle line work with subtle whip-shaded highlights"
-  },
-  {
-    label: "Balanced & symbolic",
-    detail: "focal motif framed by two supporting elements, mirrored symmetry, dot-work stippling in shadow areas, medium line weights"
-  },
-  {
-    label: "Dynamic & story-forward",
-    detail: "sense of movement, layered background texture, storytelling emphasis, bold heavy outlines with fine hatching detail, high tonal contrast"
-  }
-];
+export const maxDuration = 240;
 
 export async function POST(req: Request) {
   let release: (() => Promise<void>) | undefined;
@@ -31,8 +16,18 @@ export async function POST(req: Request) {
     const body = await readJsonObject(req);
     const briefId = validateUUID(body.brief_id);
     const idx = validateDirectionIndex(body.idx);
+    const outputMode = validateOutputMode(body.output_mode);
+    // The only per-request option is presentation. No client prompt, model,
+    // quality, count, size or timeout can escalate cost or bypass the policy.
+    if (Object.keys(body).some((key) => !["brief_id", "idx", "output_mode"].includes(key))) {
+      throw new RequestError(400, "Only brief_id, idx and output_mode are accepted.");
+    }
     const { supa, user } = await pilotContext();
-    await ownedBrief(supa, user.id, briefId);
+    const savedBrief = await ownedBrief(supa, user.id, briefId);
+    // Preflight the complete prompt against the SQL save ceiling BEFORE any
+    // charge. The reserved snapshot is compiled and checked again below to
+    // close a concurrent-edit race without ever truncating avoidance notes.
+    validateGenerationPrompt(buildGenerationPlan(savedBrief, idx, outputMode).prompt);
     if (!process.env.OPENAI_API_KEY) throw new RequestError(503, "Image generation is unavailable.");
 
     // The RPC locks the singleton config row, checks ownership/invite/quotas,
@@ -50,9 +45,9 @@ export async function POST(req: Request) {
       if (error) console.error("[pilot] Unable to release reservation; lease will expire.");
     };
     const brief = validateBrief(reservation.brief);
-    const variant = STYLE_VARIANTS[idx];
-    const prompt = buildTattooPrompt(buildPrompt(brief), variant, idx);
-    const generated = await generateTattooImage(prompt, { size: "1024x1024", quality: "low" });
+    const plan = buildGenerationPlan(brief, idx, outputMode);
+    validateGenerationPrompt(plan.prompt);
+    const generated = await generateTattooImage(plan.prompt, { expiresAt: reservation.expires_at });
     const bytes = decodeRasterBase64(generated.b64, "image/png");
     const { error: uploadError } = await supa.storage.from("concepts").upload(path, bytes, {
       contentType: "image/png", upsert: false, cacheControl: "0"
@@ -63,8 +58,16 @@ export async function POST(req: Request) {
     // Existing artwork is replaced atomically on success, never deleted first.
     const { data: concept, error: saveError } = await supa.rpc("pilot_complete_generation", {
       p_reservation_id: reservationId,
-      p_prompt: prompt,
-      p_meta: { variant: variant.label, detail: variant.detail, model: generated.model, size: generated.size, quality: "low" }
+      p_prompt: plan.prompt,
+      p_meta: {
+        variant: plan.label,
+        detail: plan.description,
+        output_mode: plan.outputMode,
+        prompt_version: plan.promptVersion,
+        model: generated.model,
+        size: generated.size,
+        quality: generated.quality
+      }
     });
     if (saveError) rpcError(saveError);
     if (!concept || typeof concept !== "object" || !concept.id || !concept.image_url) rpcError(null);

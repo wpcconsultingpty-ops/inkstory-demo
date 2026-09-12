@@ -106,14 +106,14 @@ export default function BriefFields({ step, brief, errors, onChange, disabled = 
         <>
           <div className="space-y-3">
             <label htmlFor="key_elements" className="block text-sm font-medium">Key elements (required)</label>
-            <p id="elements-help" className="text-sm text-ink-muted">List the motifs you want to discuss. If undecided, say “open to artist suggestions”. Maximum 2,000 characters.</p>
-            <textarea id="key_elements" className="textarea" required maxLength={2000} value={brief.key_elements} onChange={(event) => onChange("key_elements", event.target.value)} placeholder="e.g. mountain outline, winding trail, small sun" disabled={disabled} aria-invalid={!!errors.key_elements} aria-describedby={`elements-help${errors.key_elements ? " key_elements-error" : ""}`} />
+            <p id="elements-help" className="text-sm text-ink-muted">Put your dominant motif first, then add at most two supporting motifs. Keep smaller placements simple. If undecided, say “open to artist suggestions”. Maximum 2,000 characters.</p>
+            <textarea id="key_elements" className="textarea" required maxLength={2000} value={brief.key_elements} onChange={(event) => onChange("key_elements", event.target.value)} placeholder="e.g. Mountain as the dominant motif; winding trail and small sun as supports." disabled={disabled} aria-invalid={!!errors.key_elements} aria-describedby={`elements-help${errors.key_elements ? " key_elements-error" : ""}`} />
             {fieldError("key_elements")}
           </div>
           <div className="space-y-3">
             <label htmlFor="reference_notes" className="block text-sm font-medium">References & notes (optional)</label>
-            <p id="notes-help" className="text-sm text-ink-muted">Describe references, details to avoid and questions for your artist. No uploads here. Maximum 2,000 characters.</p>
-            <textarea id="reference_notes" className="textarea" maxLength={2000} value={brief.reference_notes} onChange={(event) => onChange("reference_notes", event.target.value)} placeholder="e.g. Leave room for future additions; ask about line weight and ageing." disabled={disabled} aria-invalid={!!errors.reference_notes} aria-describedby={`notes-help${errors.reference_notes ? " reference_notes-error" : ""}`} />
+            <p id="notes-help" className="text-sm text-ink-muted">Describe references in your own words, then give an exact avoid list: name the motifs, colours or details you do not want. Add questions for your artist. No uploads here. Maximum 2,000 characters.</p>
+            <textarea id="reference_notes" className="textarea" maxLength={2000} value={brief.reference_notes} onChange={(event) => onChange("reference_notes", event.target.value)} placeholder="e.g. Avoid: lettering, birds, red ink. Leave room for additions; ask about line weight and ageing." disabled={disabled} aria-invalid={!!errors.reference_notes} aria-describedby={`notes-help${errors.reference_notes ? " reference_notes-error" : ""}`} />
             {fieldError("reference_notes")}
           </div>
         </>
