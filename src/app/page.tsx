@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { EarlyAccessLink, PilotLinks } from "@/components/PilotLinks";
-import ExampleLayout from "@/components/ExampleLayout";
+import GalleryTeaser from "@/components/GalleryTeaser";
 
 export default function Landing() {
   return (
@@ -8,6 +8,7 @@ export default function Landing() {
       <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-6">
         <Link href="/" className="flex items-center gap-2 py-2"><Logo /><span className="font-display text-2xl">InkStory</span></Link>
         <nav aria-label="Main navigation" className="flex flex-wrap items-center gap-5 text-sm text-ink-muted">
+          <Link className="py-3 text-accent-soft hover:text-white" href="/gallery" data-testid="link-home-gallery">Concept gallery</Link>
           <Link className="py-3 hover:text-white" href="/pilot">About the pilot</Link>
           <Link className="py-3 hover:text-white" href="/auth/login">Account sign-in</Link>
         </nav>
@@ -17,23 +18,11 @@ export default function Landing() {
         <div>
           <span className="pill">Early-access preview · Tattoo planning</span>
           <h1 className="mt-6 font-display text-4xl leading-[1.08] md:text-6xl">Your tattoo starts<br />with a <em className="not-italic text-accent">story</em>.</h1>
-          <p className="mt-6 max-w-xl text-lg text-ink-muted">Make space for the meaning before the ink. Capture your ideas in a discussion brief, explore example layouts, and take better questions to your tattoo artist.</p>
+          <p className="mt-6 max-w-xl text-lg text-ink-muted">Make space for the meaning before the ink. Explore fixed concept inspiration, capture your ideas in a discussion brief, and take better questions to your tattoo artist.</p>
           <div className="mt-8 flex flex-wrap gap-3"><EarlyAccessLink /><Link href="/demo/sample" className="btn-ghost">Explore sample brief</Link></div>
-          <p className="mt-5 max-w-xl text-sm text-ink-muted">A planning tool, not a tattoo design service. The public demo has no AI generation or checkout. Account image generation is invitation-only and subject to pilot quotas.</p>
+          <p className="mt-5 max-w-xl text-sm text-ink-muted">A planning tool, not a tattoo design service. The local brief does not generate images or offer checkout. Account image generation is invitation-only and subject to pilot quotas.</p>
         </div>
-        <aside className="card" aria-labelledby="sample-title">
-          <div className="flex flex-wrap items-center justify-between gap-3"><span className="pill">A look inside</span><span className="text-xs text-ink-muted">Fictional sample</span></div>
-          <h2 id="sample-title" className="mt-5 font-display text-2xl">A little room to explore.</h2>
-          <p className="mt-3 text-sm text-ink-muted">“A reminder to keep exploring and to make time for the outdoors.”</p>
-          <div className="mt-5 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-4">
-            <div className="overflow-hidden rounded-xl border border-ink-ring"><ExampleLayout index={0} /></div>
-            <div className="text-sm">
-              <p className="font-medium">Quiet focal point</p>
-              <p className="mt-2 text-ink-muted">What matters most? What could you leave out?</p>
-            </div>
-          </div>
-          <p className="mt-4 text-xs text-ink-muted">Abstract example diagram — not a personalised tattoo concept.</p>
-        </aside>
+        <GalleryTeaser />
       </section>
 
       <section className="mx-auto max-w-6xl border-t border-ink-ring px-6 py-14 md:py-20" aria-labelledby="how-title">
@@ -41,7 +30,7 @@ export default function Landing() {
           <div>
             <span className="text-sm text-accent">From an idea to a conversation</span>
             <h2 id="how-title" className="mt-3 font-display text-3xl">Begin with the brief.</h2>
-            <p className="mt-4 text-sm text-ink-muted">No sign-in is needed to try the local planning flow. Use a general story, not sensitive personal details.</p>
+            <p className="mt-4 text-sm text-ink-muted">No sign-in is needed to try the local planning flow. Use a general story, not sensitive personal details. The concept gallery is separate editorial inspiration, not an output of this flow.</p>
             <Link href="/demo/brief" className="btn-ghost mt-6">Write a local brief</Link>
           </div>
           <ol className="divide-y divide-ink-ring">

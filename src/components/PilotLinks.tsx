@@ -9,6 +9,7 @@ export function EarlyAccessLink({ className = "btn-primary" }: { className?: str
 export function PilotLinks() {
   return (
     <nav aria-label="Pilot information" className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-ink-muted print:hidden">
+      <Link className="py-3 text-accent-soft hover:text-white" href="/gallery">Concept gallery</Link>
       <Link className="py-3 hover:text-white" href="/privacy">Privacy & data</Link>
       <Link className="py-3 hover:text-white" href="/pilot">Pilot scope</Link>
       <a className="py-3 hover:text-white" href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer">Contact on Facebook<span className="sr-only"> (opens a new tab)</span></a>

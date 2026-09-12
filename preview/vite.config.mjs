@@ -5,8 +5,10 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   root: dir,
   base: "./",
+  publicDir: path.join(dir, "../public"),
   resolve: {
     alias: [
+      { find: "next/image", replacement: path.join(dir, "image.tsx") },
       { find: "next/link", replacement: path.join(dir, "link.tsx") },
       { find: "next/navigation", replacement: path.join(dir, "navigation.tsx") },
       { find: "@", replacement: path.join(dir, "../src") }

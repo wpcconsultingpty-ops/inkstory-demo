@@ -7,6 +7,7 @@ import DemoDashboard from "../src/app/demo/dashboard/DemoDashboard";
 import AccountUnavailable from "../src/components/AccountUnavailable";
 import PrivacyPage from "../src/app/privacy/page";
 import PilotPage from "../src/app/pilot/page";
+import GalleryPage from "../src/app/gallery/page";
 import { Navigation } from "./navigation";
 import "../src/app/globals.css";
 
@@ -18,6 +19,7 @@ function App() {
   if (path === "/") view = <Landing />;
   else if (path === "/privacy") view = <PrivacyPage />;
   else if (path === "/pilot") view = <PilotPage />;
+  else if (path === "/gallery") view = <GalleryPage />;
   else if (path === "/demo/brief") view = <DemoBriefWizard />;
   else if (path === "/demo/sample") view = <DemoConceptsView briefId="sample" />;
   else if (path === "/demo/dashboard") view = <DemoDashboard />;
