@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {isStaging && <div className="border-b border-ink-ring bg-ink-edge px-5 py-3 text-center text-sm text-accent-soft" role="note">
-          STAGING · Test data only · AI generation and payments disabled · Production is separate
+          STAGING · Test environment · Image generation invitation-only · Payments disabled · Production is separate
         </div>}
         {children}
       </body>

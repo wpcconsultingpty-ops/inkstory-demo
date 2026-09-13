@@ -21,6 +21,22 @@ RPCs execute as the database migration owner with a pinned search path, explicit
 
 Because the supported RPCs are authenticated (not server-secret) APIs, an invited person can invoke them directly for **their own** brief. They can consume their own/global pilot allowance, upload to an owned live reservation path, and complete it; they cannot edit quota/configuration rows or use this as payment, cross-user, arbitrary-path, or unrestricted concept-write authority. Do not claim that completed concepts are cryptographically attested OpenAI output. If that attestation is later required, introduce a separate narrowly scoped server-only completion credential/capability after security review. The API-side environment switch controls all paid provider calls; the DB switch also closes direct reservation/upload/completion.
 
+### Controlled staging build exception
+
+For `NEXT_PUBLIC_INKSTORY_ENVIRONMENT=staging`, `next.config.js` still requires a nonempty, non-production Supabase reference and its exact matching URL. Generation remains disabled by default: `INKSTORY_GENERATION_ENABLED=false` retains the existing isolated-staging behavior without requiring an override or a particular Vercel project.
+
+An operator-approved controlled staging test may pass the build guard with generation enabled **only** when all of these conditions hold:
+
+- `INKSTORY_GENERATION_ENABLED` is exactly `true`.
+- `INKSTORY_CONTROLLED_STAGING_TEST` is exactly `true`.
+- `NEXT_PUBLIC_INKSTORY_STAGING_REF` is exactly `ekeewaqospfceracerkl`; no other reference is allowed for enabled staging.
+- `NEXT_PUBLIC_SUPABASE_URL` is exactly `https://ekeewaqospfceracerkl.supabase.co`.
+- If `VERCEL_PROJECT_ID` is present, it is exactly `prj_KZL8MikMxfpdq9SiiMquOWt6Y2y9`. An absent value permits local checks; an empty or mismatched value does not.
+
+Missing or malformed generation flags fail closed. The controlled override must be present and exactly `true` to enable staging generation; case changes, whitespace and truthy substitutes do not qualify. When generation is explicitly `false`, the override is ignored. The production database reference `yawmspiblfzzsosyeboc` and mismatched URLs remain forbidden in staging even with the override. Staging no-index headers and non-staging behavior are unchanged.
+
+**This is only a Next.js configuration/build-guard exception, not runtime authorization.** It does not change database configuration, quotas, invitations, allowlist membership/expiry, authentication, reservation charging, storage checks or runtime generation gates. An enabled build still requires the existing environment gate, enabled database pilot switch, valid invitation and available per-user/global quota. The override alone neither enables generation nor grants anyone access. Use only for an approved isolated test; return the app gate to `false` and remove/disable the override afterward. Keep production generation disabled.
+
 ## Migration behavior and safety
 
 `supabase/migrations/202609120001_invite_only_free_pilot.sql` is a one-time transactional migration. It intentionally fails if pilot objects already exist; use the migration ledger rather than rerunning fragments.

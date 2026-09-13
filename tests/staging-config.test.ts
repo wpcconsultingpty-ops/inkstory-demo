@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { test } from "node:test";
 import { supabaseConfig } from "../src/lib/supabase/config";
 
@@ -17,4 +19,12 @@ test("staging config rejects production and mismatched database references", () 
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
     Object.assign(process.env, saved);
   }
+});
+
+test("staging banner stays accurate whether invitation-only generation is enabled or disabled", () => {
+  const layout = readFileSync(resolve("src/app/layout.tsx"), "utf8");
+  assert.match(layout, /STAGING · Test environment · Image generation invitation-only · Payments disabled · Production is separate/);
+  assert.doesNotMatch(layout, /AI generation and payments disabled/);
+  assert.match(layout, /isStaging && <div/);
+  assert.doesNotMatch(layout, /["']use client["']/);
 });
