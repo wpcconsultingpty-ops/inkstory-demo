@@ -1,6 +1,6 @@
 # Personalised generation quality
 
-Implementation notes for the generation art-direction upgrade, updated 13 September 2026. New requests are now on-body only, with the gallery presentation as the visual target.
+Implementation notes for the generation art-direction upgrade, updated 13 September 2026. New requests remain on-body only, with the gallery presentation as the visual target. Version 5 strengthens anatomical side and surface centring without changing saved brief fields, model settings or release gates.
 
 ## Shared frontend/server contract
 
@@ -52,7 +52,7 @@ The UI has no output-format selector. The exact saved body placement is prominen
 | Format | PNG |
 | Count | `n: 1` |
 | Automatic retries | None |
-| Prompt version | `inkstory-generation-v4` |
+| Prompt version | `inkstory-generation-v5` |
 
 The selected model and image-generation parameters use the official OpenAI images generation API contract supplied for this upgrade: [OpenAI — Generate images](https://developers.openai.com/api/reference/resources/images/methods/generate/) (`https://developers.openai.com/api/reference/resources/images/methods/generate/`).
 
@@ -89,25 +89,35 @@ The compiled prompt itself is retained as `p_prompt`. Metadata describes the pol
 
 ### Database prompt budget: no truncation or paid unsavable result
 
-The existing completion RPC rejects prompts over **10,000 Unicode characters**. Version 4 uses compact policy/data sections and does not repeat the full style, placement, size or palette values outside the saved data block. The longer `styleNote` and `placementNote` remain available for frontend review but are not copied verbatim into the provider prompt.
+The existing completion RPC rejects prompts over **10,000 Unicode characters**. Version 5 keeps policy/data sections concise to accommodate the new anatomical guidance. It does not repeat the full style, placement, size or palette values outside the saved data block. The longer `styleNote` and `placementNote` remain available for frontend review but are not copied verbatim into the provider prompt; the same anatomical instructions appear in both preview notes and the compiled prompt.
 
 The regression suite proves a conservative upper bound for **any valid 6,000-character saved brief**:
 
 ```text
 6,000 maximum saved field characters
   204 maximum length-header/separator characters
-3,731 maximum policy/presentation characters
+3,750 maximum policy/presentation characters
 -----
-9,935 maximum prompt characters (< 10,000)
+9,954 maximum prompt characters (< 10,000)
 ```
 
-The policy maximum covers **7,920 combinations** across all existing options, custom style/palette fallbacks, sensitive-body fallback and all three on-body directions. Exact round-trip tests cover quotes, backslashes, supplementary Unicode, allowed whitespace and fake data markers; no exclusion is truncated. The remaining margin is small: future policy edits must rerun the full bound test rather than assume the prompt still fits.
+The policy maximum covers **12,240 combinations**, each with exactly 6,000 saved field characters: all existing styles/palettes plus custom fallbacks, all sizes and directions, generic/torso/sensitive coverage, every reachable extent branch, and both precise inner-wrist sides. Mixed custom regions exercise coverage precedence; precise wrist guidance can only select small-area, regular coverage. The longest prompt in this matrix is **9,950** characters; the conservative bound above also allows maximum-length field headers. Additional tests use 120-character placement/size fields on both wrist branches. Exact round-trip tests cover quotes, backslashes, supplementary Unicode, allowed whitespace and fake data markers, including both enriched wrist fixtures; no exclusion is truncated. The remaining 46-character conservative margin is small: future policy edits must rerun the full bound test rather than assume the prompt still fits.
 
 `validateGenerationPrompt` remains a separate browser-safe helper, so `buildGenerationPlan` does **not** throw a length error during React rendering. The route explicitly validates the entire compiled prompt from the owned saved brief **before reservation**, and validates the reserved snapshot's freshly compiled prompt again before provider access. Future policy growth or unexpected oversized data therefore produces a readable **400** rather than a paid image that cannot be saved. Preflight overflow performs no reservation or provider call; snapshot overflow sends no provider request and releases the already-counted reservation under the existing no-refund rules.
 
 ### On-body mockup
 
-Every new request mandates the exact anatomical area in the saved placement field. Specified left/right, inner/outer and orientation are preserved; other brief fields cannot override placement or switch to standalone art. All three directions keep that same area, natural scale and curvature.
+Every new request mandates the exact anatomical area in the saved placement field. Left/right means the **wearer's anatomical side**, not the viewer's or canvas side; mirroring and substituting another region are forbidden. Specified inner/outer and orientation are preserved. Other fields cannot change the anatomical area/side/surface or switch to standalone art. All three directions keep that same area, natural scale and curvature.
+
+Centring is relative to the **selected skin surface at the tattoo's height**, not the frame centre or the centre of the entire limb. It is a default, not a correction of deliberately off-centre placement: explicit offsets and design asymmetry within the selected surface must be honoured, including notes in other saved fields. The policy does not impose symmetry or a universal front-facing pose on calves, forearms, backs, sleeves, torso crops or other regions.
+
+Only an unambiguous single **left/right inner or palm-facing wrist** receives a precise view rule:
+
+- Straight-on, palm facing the camera, fingers up; the wearer's **RIGHT** wrist has its thumb on **viewer-left**, and the wearer's **LEFT** wrist has its thumb on **viewer-right**.
+- Show enough hand and wrist to verify that handedness; do not crop away the evidence.
+- Unless explicitly offset, centre between the two wrist skin edges at tattoo height. Keep ink above the wrist crease on the forearm side, with no hand/palm spill.
+
+The conservative classifier reads only `placement`, never side mentions in story, style, elements or reference notes. It recognizes common anatomical word orders, casing/spacing, parentheses and comma/semicolon qualifiers for the same inner/palm-facing surface, centring above the crease, offsets, asymmetry and orientation. The exact regression fixture is `Right inner wrist, palm-facing surface, centred above the wrist crease`, with a corresponding left-hand fixture. Bilateral, unspecified, outer/dorsal, contradictory or unrecognized freeform placements retain the general anatomical guidance instead of a guessed thumb rule. Classification never rewrites or truncates saved data.
 
 The gallery presentation is a concrete rendering target: photoreal studio view, natural skin texture, crisp tattoo edges and tonal depth, ink following curved skin rather than a pasted decal, soft side-light and a charcoal background. No plastic skin, CGI gloss, props or extra limbs. The chosen tattoo technique, palette, motifs and suitable detail level remain personal to the brief; gallery subjects are not copied or automatically inserted.
 
@@ -156,18 +166,21 @@ npm test
 
 Results at implementation verification:
 
-- **TypeScript:** passes.
-- **Full offline suite:** 101 passed, 0 failed, including mandatory placement, gallery presentation across every style/direction, rejected artwork requests, historical metadata and the existing privacy/quota regressions.
+- **Runtime:** Node **24.21.0**.
+- **TypeScript:** `npm run typecheck` passes.
+- **Full offline suite:** `npm test` — **118 passed, 0 failed**, including all **41** generation-plan tests, the 12,240-combination prompt bound, exact wrist fixtures and negative classifier cases, mandatory placement, gallery presentation across every style/direction, rejected artwork requests, historical metadata and the existing privacy/quota regressions.
 
 Tests cover every existing style, strict palettes, exact exclusions, no injected gallery motifs, on-body-only validation, all placement/size options, safe anatomical forms, the full prompt-budget bound, lossless maximum-length brief serialization, overflow rejection before reservation and on a changed snapshot, mode validation before auth/gates, fixed provider payload, exact alias/snapshot acceptance with actual model metadata, timeout bounding, invalid/oversized/mismatched responses, no retries, saved-snapshot prompt assembly, reservation ordering, private URLs and non-destructive failure paths. Route orchestration uses the actual route source with narrow offline dependency doubles; it does not prove hosted authentication, network latency or provider success.
 
-**No live OpenAI request, app-provider credential use or environment change was performed for this upgrade.** Release operations and hosted browser checks are recorded in the staging handoff. No claim is made that personalised generation already matches the gallery's visual quality. A separately rendered prompt sanity check is not evidence that the hosted OpenAI route works.
+**This v5 implementation and verification used no live image requests, credentials, database/environment changes, commits, pushes or deployments. Generation was not enabled.** The code changes are limited to the shared generation plan, its tests and this document; release operations remain separate. No claim is made that personalised generation already matches the gallery's visual quality or that the reported wrist handedness/centring failure is visually resolved. Prompt-level tests are not pixel inspection or evidence that the hosted OpenAI route works.
 
 Before enabling generation, the release owner should run an explicitly authorized, budgeted end-to-end test through the real disabled-by-default app gates and inspect:
 
 - style preservation and strict exclusions across at least a small-area design and a larger composition;
 - on-body anatomy, coverage, framing, full motif visibility and readable mockup footer;
 - exact selected body area, left/right, inner/outer and orientation across all three directions, with no standalone artwork;
+- wrist handedness in the specified palm-facing, fingers-up view (right thumb viewer-left; left thumb viewer-right), enough anatomical context, skin-edge centring at tattoo height and no palm spill;
+- intentional off-centre placement and asymmetric motifs remaining intentional, and non-wrist/outer/dorsal placements not inheriting the inner-wrist pose;
 - gallery-level skin/ink integration, clarity, lighting and framing without copying gallery subjects;
 - actual provider latency against the returned lease, response size, private upload and completion;
 - saved prompt/metadata, private retrieval and successful archival replacement;
