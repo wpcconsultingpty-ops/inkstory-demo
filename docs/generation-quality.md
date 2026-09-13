@@ -1,17 +1,16 @@
 # Personalised generation quality
 
-Implementation notes for the generation art-direction upgrade, 12 September 2026.
+Implementation notes for the generation art-direction upgrade, updated 13 September 2026. New requests are now on-body only, with the gallery presentation as the visual target.
 
 ## Shared frontend/server contract
 
 `src/lib/generation-plan.ts` is browser-safe. It imports only the brief serializer and existing browser-safe validation; it does not import credentials, provider code, gallery assets or server clients.
 
 ```ts
-type OutputMode = "on_body" | "artwork";
+type OutputMode = "on_body";
 
 OUTPUT_MODES // readonly [{ id, label, description }, ...]
 // on_body: On-body mockup
-// artwork: Artwork only
 
 GENERATION_DIRECTIONS // readonly [{ id, label, description }, ...]
 // 0: Focused symbol
@@ -20,7 +19,7 @@ GENERATION_DIRECTIONS // readonly [{ id, label, description }, ...]
 
 validateOutputMode(value: unknown): OutputMode
 validateGenerationPrompt(value: unknown): string // 1–10000 Unicode code points
-buildGenerationPlan(brief: BriefDraft, idx: number, outputMode: OutputMode)
+buildGenerationPlan(brief: BriefDraft, idx: number, outputMode: OutputMode = "on_body")
 // returns {
 //   label, description, outputMode, outputLabel,
 //   size, quality, model, promptVersion, prompt, placementNote, styleNote
@@ -39,7 +38,9 @@ Use these exact shared labels, descriptions and plan notes in the review interfa
 }
 ```
 
-Omitting `output_mode` defaults to `on_body` for existing callers. Explicit `null`, empty strings, booleans, numbers, unknown values, altered casing and surrounding whitespace return **400**, before authentication, the environment gate or quota reservation. Extra request fields—including `model`, `quality`, `size`, `n`, `prompt`, `brief`, `output_format` and timeout controls—also return **400**. A valid output choice never grants pilot eligibility or bypasses the existing gates.
+Omitting `output_mode` defaults to `on_body` for existing callers. `artwork` is rejected, as are explicit `null`, empty strings, booleans, numbers, unknown values, altered casing and surrounding whitespace: **400**, before authentication, the environment gate or quota reservation. Extra request fields including `model`, `quality`, `size`, `n`, `prompt`, `brief`, `output_format` and timeout controls also return **400**. On-body output never grants pilot eligibility or bypasses the existing gates.
+
+The UI has no output-format selector. The exact saved body placement is prominent in the plan and confirmation, and the client submits the literal `on_body` value. Historical images retain their existing output labels through a separate `SavedOutputMode` metadata type; no existing artwork is deleted, regenerated or relabelled.
 
 ## Fixed server policy
 
@@ -47,11 +48,11 @@ Omitting `output_mode` defaults to `on_body` for existing callers. Explicit `nul
 | --- | --- |
 | Model | `gpt-image-2.5-flare` |
 | Quality | `high` |
-| Size | `1024x1536` (portrait, for both outputs and all placements) |
+| Size | `1024x1536` (portrait, all placements) |
 | Format | PNG |
 | Count | `n: 1` |
 | Automatic retries | None |
-| Prompt version | `inkstory-generation-v3` |
+| Prompt version | `inkstory-generation-v4` |
 
 The selected model and image-generation parameters use the official OpenAI images generation API contract supplied for this upgrade: [OpenAI — Generate images](https://developers.openai.com/api/reference/resources/images/methods/generate/) (`https://developers.openai.com/api/reference/resources/images/methods/generate/`).
 
@@ -88,35 +89,37 @@ The compiled prompt itself is retained as `p_prompt`. Metadata describes the pol
 
 ### Database prompt budget: no truncation or paid unsavable result
 
-The existing completion RPC rejects prompts over **10,000 Unicode characters**. Version 3 uses eight compact policy/data sections and does not repeat the full style, placement, size or palette values outside the saved data block. The longer `styleNote` and `placementNote` remain available for frontend review but are not copied verbatim into the provider prompt.
+The existing completion RPC rejects prompts over **10,000 Unicode characters**. Version 4 uses compact policy/data sections and does not repeat the full style, placement, size or palette values outside the saved data block. The longer `styleNote` and `placementNote` remain available for frontend review but are not copied verbatim into the provider prompt.
 
 The regression suite proves a conservative upper bound for **any valid 6,000-character saved brief**:
 
 ```text
 6,000 maximum saved field characters
   204 maximum length-header/separator characters
-3,286 maximum policy/presentation characters
+3,731 maximum policy/presentation characters
 -----
-9,490 maximum prompt characters (< 10,000)
+9,935 maximum prompt characters (< 10,000)
 ```
 
-The policy maximum covers **15,840 combinations** across all existing options, custom style/palette fallbacks, sensitive-body fallback, both output modes and all three directions. Observed maxima are **9,485** for option combinations and **9,488** with 120-character custom placement and size fields. Exact round-trip tests cover quotes, backslashes, supplementary Unicode, allowed whitespace and fake data markers; no exclusion is truncated.
+The policy maximum covers **7,920 combinations** across all existing options, custom style/palette fallbacks, sensitive-body fallback and all three on-body directions. Exact round-trip tests cover quotes, backslashes, supplementary Unicode, allowed whitespace and fake data markers; no exclusion is truncated. The remaining margin is small: future policy edits must rerun the full bound test rather than assume the prompt still fits.
 
 `validateGenerationPrompt` remains a separate browser-safe helper, so `buildGenerationPlan` does **not** throw a length error during React rendering. The route explicitly validates the entire compiled prompt from the owned saved brief **before reservation**, and validates the reserved snapshot's freshly compiled prompt again before provider access. Future policy growth or unexpected oversized data therefore produces a readable **400** rather than a paid image that cannot be saved. Preflight overflow performs no reservation or provider call; snapshot overflow sends no provider request and releases the already-counted reservation under the existing no-refund rules.
 
 ### On-body mockup
 
-One detailed dark-studio mockup on an anonymous, fictional, unrecognizable adult, cropped to the requested region. Soft directional light and a quiet charcoal background support the tattoo; no costumes, props, jewellery, equipment, scenery or collage. The tattoo follows believable anatomy and surface perspective without losing its foreground motif or chosen art style.
+Every new request mandates the exact anatomical area in the saved placement field. Specified left/right, inner/outer and orientation are preserved; other brief fields cannot override placement or switch to standalone art. All three directions keep that same area, natural scale and curvature.
 
-Torso, rib, chest, hip and thigh placements require modest crops and opaque coverage of intimate areas. Front chest explicitly excludes breasts, nipples and nudity. Sensitive or identifying placements—and crops that cannot safely show the requested design—use a smooth, neutral abstract body form without explicit anatomy instead. No child or real person's face is requested.
+The gallery presentation is a concrete rendering target: photoreal studio view, natural skin texture, crisp tattoo edges and tonal depth, ink following curved skin rather than a pasted decal, soft side-light and a charcoal background. No plastic skin, CGI gloss, props or extra limbs. The chosen tattoo technique, palette, motifs and suitable detail level remain personal to the brief; gallery subjects are not copied or automatically inserted.
+
+Torso, rib, chest, hip and thigh placements require modest crops and opaque intimate coverage. If coverage would hide the requested area, the prompt uses an anatomically relevant non-explicit body form of that same area, not another body part or flat artwork. Sensitive or identifying placements likewise use a non-explicit form without intimate detail or a recognizable face. No child or real person's face is requested.
 
 The exact visible footer **AI CONCEPT MOCKUP** is requested outside the tattoo/body area. It must be inspected in a future visual acceptance test; prompt instructions alone do not establish successful text rendering.
 
-### Artwork only
+### Historical artwork-only images
 
-One isolated finished design on a quiet off-white background, fitted within clear margins and shaped for the requested placement. No skin, mannequin, studio photograph, sketchbook clutter, tools, swatches, scenery or multiple alternatives. No added caption or signature. The selected art style remains intact.
+Artwork-only generation is no longer offered or accepted. Existing saved artwork-only images remain private and viewable with their original labels; legacy results with unknown settings remain labelled unknown rather than inferred as on-body.
 
-Both modes reject unrealistic microdetail and tiny packed lines. Both are concepts for discussion, not stencils, evidence of real healed tattoos or guarantees of an artist's approval or tattoo safety.
+New concepts reject unrealistic microdetail and tiny packed lines. These are discussion references, not stencils, evidence of real healed tattoos or guarantees of an artist's approval or tattoo safety. This implementation specifies presentation and placement; it does not automatically inspect generated pixels or prove compliance with that standard.
 
 ## Lease, spend and storage protections
 
@@ -154,18 +157,18 @@ npm test
 Results at implementation verification:
 
 - **TypeScript:** passes.
-- **Focused prompt/security tests:** 59 passed, 0 failed.
-- **Full offline suite:** 98 passed, 0 failed after the parallel frontend integration, including its 11 review-interface tests and the existing 16 isolated PostgreSQL migration/RLS/quota/archive tests.
+- **Full offline suite:** 101 passed, 0 failed, including mandatory placement, gallery presentation across every style/direction, rejected artwork requests, historical metadata and the existing privacy/quota regressions.
 
-Tests cover every existing style, strict palettes, exact exclusions, no injected gallery motifs, both formats, all placement/size options, safe torso/abstract-body handling, the full prompt-budget bound, lossless maximum-length brief serialization, overflow rejection before reservation and on a changed snapshot, mode validation before auth/gates, fixed provider payload, exact alias/snapshot acceptance with actual model metadata, timeout bounding, invalid/oversized/mismatched responses, no retries, saved-snapshot prompt assembly, reservation ordering, private URLs and non-destructive failure paths. Route orchestration uses the actual route source with narrow offline dependency doubles; it does not prove hosted authentication, network latency or provider success.
+Tests cover every existing style, strict palettes, exact exclusions, no injected gallery motifs, on-body-only validation, all placement/size options, safe anatomical forms, the full prompt-budget bound, lossless maximum-length brief serialization, overflow rejection before reservation and on a changed snapshot, mode validation before auth/gates, fixed provider payload, exact alias/snapshot acceptance with actual model metadata, timeout bounding, invalid/oversized/mismatched responses, no retries, saved-snapshot prompt assembly, reservation ordering, private URLs and non-destructive failure paths. Route orchestration uses the actual route source with narrow offline dependency doubles; it does not prove hosted authentication, network latency or provider success.
 
-**No live OpenAI request, app-provider credential use, environment change, commit, push or deployment was performed in this implementation task.** No claim is made that personalised generation now matches the gallery's visual quality. A separate Computer-rendered prompt sanity check, if performed by the parent task, is not evidence that the hosted OpenAI route works.
+**No live OpenAI request, app-provider credential use or environment change was performed for this upgrade.** Release operations and hosted browser checks are recorded in the staging handoff. No claim is made that personalised generation already matches the gallery's visual quality. A separately rendered prompt sanity check is not evidence that the hosted OpenAI route works.
 
 Before enabling generation, the release owner should run an explicitly authorized, budgeted end-to-end test through the real disabled-by-default app gates and inspect:
 
 - style preservation and strict exclusions across at least a small-area design and a larger composition;
 - on-body anatomy, coverage, framing, full motif visibility and readable mockup footer;
-- artwork-only separation from skin/mockup presentation;
+- exact selected body area, left/right, inner/outer and orientation across all three directions, with no standalone artwork;
+- gallery-level skin/ink integration, clarity, lighting and framing without copying gallery subjects;
 - actual provider latency against the returned lease, response size, private upload and completion;
 - saved prompt/metadata, private retrieval and successful archival replacement;
 - unchanged existing art and counted allowance on a controlled failure.

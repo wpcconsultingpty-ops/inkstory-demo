@@ -5,7 +5,7 @@ import type { BriefDraft } from "../src/lib/brief";
 
 const syntheticBrief: BriefDraft = {
   meaning: "A fictional planning brief about staying grounded through change.",
-  placement: "Inner forearm",
+  placement: "Left inner forearm, vertical toward elbow",
   size_cm: "Medium (8–15cm)",
   style: "Black-and-grey realism",
   key_elements: "An oak tree as the dominant motif; exposed roots and a small crescent moon as supports.",

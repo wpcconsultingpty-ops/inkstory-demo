@@ -17,8 +17,8 @@ export async function POST(req: Request) {
     const briefId = validateUUID(body.brief_id);
     const idx = validateDirectionIndex(body.idx);
     const outputMode = validateOutputMode(body.output_mode);
-    // The only per-request option is presentation. No client prompt, model,
-    // quality, count, size or timeout can escalate cost or bypass the policy.
+    // New output is on-body only, enforced before auth or reservation.
+    // No client prompt, model, quality, count, size or timeout can bypass policy.
     if (Object.keys(body).some((key) => !["brief_id", "idx", "output_mode"].includes(key))) {
       throw new RequestError(400, "Only brief_id, idx and output_mode are accepted.");
     }

@@ -164,10 +164,10 @@ test("invalid output modes and spend controls fail before authentication, the en
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => { calls++; throw new Error("No outbound calls permitted"); });
   try {
-    for (const output_mode of [null, "", false, true, 0, 1, [], {}, "ON_BODY", "on-body", " artwork ", "photo"]) {
+    for (const output_mode of ["artwork", null, "", false, true, 0, 1, [], {}, "ON_BODY", "on-body", " artwork ", "photo"]) {
       const res = await generateOne(request(JSON.stringify({ brief_id: BRIEF, idx: 0, output_mode })));
       assert.equal(res.status, 400);
-      assert.match((await res.json()).error, /output_mode must be on_body or artwork/);
+      assert.match((await res.json()).error, /output_mode must be on_body\. New designs must use the saved placement/);
     }
     for (const option of ["model", "quality", "size", "n", "prompt", "brief", "expiresAt", "timeoutMs", "output_format"]) {
       const res = await generateOne(request(JSON.stringify({ brief_id: BRIEF, idx: 0, [option]: "override" })));
@@ -479,7 +479,7 @@ function offlineGenerationRoute(options: {
 }
 
 test("route reserves first, uses saved snapshot, returns private image URLs and persists actual metadata", async () => {
-  for (const mode of [undefined, "on_body", "artwork"] as const) {
+  for (const mode of [undefined, "on_body"] as const) {
     const route = offlineGenerationRoute();
     const response = await route.POST(request(JSON.stringify({ brief_id: BRIEF, idx: 1, output_mode: mode })));
     assert.equal(response.status, 200);
@@ -526,7 +526,7 @@ test("maximum-length saved snapshots with quotes, backslashes and Unicode preser
     input.reference_notes = avoidance + repeated(MAX_BRIEF_LENGTH - used - avoidance.length);
     const saved = validateBrief(input);
     assert.equal(Object.values(saved).reduce((sum, value) => sum + Array.from(value).length, 0), 6000);
-    for (const output_mode of ["on_body", "artwork"] as const) {
+    for (const output_mode of [undefined, "on_body"] as const) {
       const route = offlineGenerationRoute({ preflightBrief: saved, snapshotBrief: saved });
       const response = await route.POST(request(JSON.stringify({ brief_id: BRIEF, idx: 1, output_mode })));
       assert.equal(response.status, 200);
@@ -546,8 +546,8 @@ test("route persists the accepted provider snapshot model rather than overwritin
   assert.equal(route.metadata?.model, "gpt-image-2.5-flare-2026-09-08");
 });
 
-test("route validates modes before auth or reservation even when generation is disabled", async () => {
-  for (const output_mode of [null, "", false, 0, "bad", "ARTWORK"]) {
+test("route rejects artwork and invalid modes before auth or reservation even when generation is disabled", async () => {
+  for (const output_mode of ["artwork", null, "", false, 0, "bad", "ARTWORK"]) {
     const route = offlineGenerationRoute({ gate: "false" });
     assert.equal((await route.POST(request(JSON.stringify({ brief_id: BRIEF, idx: 1, output_mode })))).status, 400);
     assert.deepEqual(route.calls, []);
@@ -555,6 +555,24 @@ test("route validates modes before auth or reservation even when generation is d
   const disabled = offlineGenerationRoute({ gate: "false" });
   assert.equal((await disabled.POST(request(JSON.stringify({ brief_id: BRIEF, idx: 1 })))).status, 503);
   assert.deepEqual(disabled.calls, ["auth"]);
+});
+
+test("artwork is rejected before auth, brief lookup, preflight, reservation or provider on every direction", async () => {
+  for (const gate of ["true", "false"]) for (const idx of [0, 1, 2]) {
+    const route = offlineGenerationRoute({ gate, failAt: "auth" });
+    const response = await route.POST(request(JSON.stringify({ brief_id: BRIEF, idx, output_mode: "artwork" })));
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).error, /output_mode must be on_body/);
+    assert.deepEqual(route.calls, []);
+    assert.equal(route.validations, 0);
+    assert.equal(route.providerCalls, 0);
+    assert.equal(route.metadata, undefined);
+  }
+  for (const output_mode of [undefined, "on_body"]) {
+    const route = offlineGenerationRoute({ failAt: "auth" });
+    assert.equal((await route.POST(request(JSON.stringify({ brief_id: BRIEF, idx: 1, output_mode })))).status, 401);
+    assert.deepEqual(route.calls, ["auth"], "a valid format never bypasses authentication");
+  }
 });
 
 test("route releases a too-short or invalid lease without a provider call or concept replacement", async () => {

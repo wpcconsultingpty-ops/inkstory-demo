@@ -77,14 +77,17 @@ test("server rows and API results are reduced to private route URLs and safe met
   ]) assert.equal(privateConcept(invalid), null);
 });
 
-test("real empty grid renders two radios, three honest directions and no fake output or request", (t) => {
+test("real empty grid requires saved body placement, shows the gallery target and has no output selector or fake result", (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => { calls++; throw new Error("No outbound request allowed"); });
   const html = renderToStaticMarkup(React.createElement(ConceptsGrid, { briefId: ID, initialConcepts: [], brief, previewOnly: true }));
-  assert.equal((html.match(/type="radio"/g) || []).length, 2);
-  const selectedRadio = html.match(/<input[^>]*value="on_body"[^>]*>/)?.[0] ?? "";
-  assert.match(selectedRadio, /checked=""/);
-  assert.match(html, /value="artwork"/);
+  assert.equal((html.match(/type="radio"/g) || []).length, 0);
+  assert.match(html, /New images: On-body mockup only/);
+  assert.match(html, /data-testid="selected-body-placement">Inner forearm/);
+  assert.match(html, /All three directions request this same body area/);
+  assert.match(html, /Gallery-style presentation/);
+  assert.match(html, /Your story, tattoo style and palette remain your own/);
+  assert.doesNotMatch(html, /value="artwork"|radio-output|setOutputMode/);
   for (const direction of GENERATION_DIRECTIONS) assert.ok(html.includes(direction.label));
   assert.equal((html.match(/data-testid="button-review-/g) || []).length, 3);
   assert.match(html, /2:3 portrait/);
@@ -97,8 +100,8 @@ test("real empty grid renders two radios, three honest directions and no fake ou
 
 test("review renders intended shared settings and disclosures, but never raw prompt text", (t) => {
   t.mock.method(globalThis, "fetch", async () => { throw new Error("Rendering cannot send a request"); });
-  const request = { index: 2, outputMode: "artwork" as const, replacement: true };
-  const plan = buildGenerationPlan(brief, request.index, request.outputMode);
+  const request = { index: 2, replacement: true };
+  const plan = buildGenerationPlan(brief, request.index);
   const html = renderToStaticMarkup(React.createElement(GenerationReview, {
     brief, request, previewOnly: false, onCancel() {}, onConfirm() {},
   }));
@@ -114,6 +117,8 @@ test("review renders intended shared settings and disclosures, but never raw pro
   assert.match(html, /not promised to match the editorial gallery/);
   assert.match(html, /Confirm &amp; request one replacement/);
   assert.match(html, /Review the saved brief being sent/);
+  assert.match(html, /data-testid="review-body-placement">Inner forearm/);
+  assert.match(html, /Gallery-style on-body rendering/);
   assert.match(html, /Oak tree; roots; crescent moon/);
   assert.match(html, /Avoid: lettering, birds, red ink/);
   assert.doesNotMatch(html, /POLICY AND DATA BOUNDARY|SAVED BRIEF DATA|END SAVED BRIEF DATA/);
@@ -141,12 +146,12 @@ test("only explicit confirmation reaches one bounded API call, and preview retur
   assert.equal((grid.match(/fetch\(/g) || []).length, 1);
   assert.match(grid, /if \(!review\) return/);
   assert.match(grid, /if \(lock\.current\) return/);
-  assert.match(grid, /body: JSON\.stringify\(\{ brief_id: briefId, idx: index, output_mode: requestedMode \}\)/);
+  assert.match(grid, /body: JSON\.stringify\(\{ brief_id: briefId, idx: index, output_mode: "on_body" \}\)/);
   assert.doesNotMatch(grid, /useEffect|setInterval|setTimeout|Promise\.all|AbortController/);
   const confirm = grid.slice(grid.indexOf("async function confirmRequest"));
   assert.ok(confirm.indexOf("if (previewOnly)") < confirm.indexOf('fetch("/api/generate-one"'));
   assert.match(confirm, /if \(previewOnly\) \{[\s\S]*?Isolated preview: no request sent[\s\S]*?return;/);
-  assert.match(grid, /onChange=\{\(\) => setOutputMode\(mode\.id\)\}/);
+  assert.doesNotMatch(grid, /setOutputMode|type="radio"/);
   assert.match(grid, /onCancel=\{\(\) => setReview\(null\)\}/);
   assert.match(grid, /onClick=\{\(\) => openReview\(index\)\}/);
   assert.match(grid, /setSlots\([\s\S]*?slotIndex === index \? concept : slot/);

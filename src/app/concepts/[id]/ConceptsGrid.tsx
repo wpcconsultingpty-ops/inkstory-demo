@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import type { BriefDraft } from "@/lib/brief";
-import { buildGenerationPlan, GENERATION_DIRECTIONS, OUTPUT_MODES, type OutputMode } from "@/lib/generation-plan";
+import { buildGenerationPlan, GENERATION_DIRECTIONS } from "@/lib/generation-plan";
 import { generationError } from "@/components/pilot-client";
 import { EarlyAccessLink } from "@/components/PilotLinks";
 import ExportBrief from "@/components/ExportBrief";
@@ -21,18 +21,17 @@ export default function ConceptsGrid({ briefId, initialConcepts, brief, previewO
   previewOnly?: boolean;
 }) {
   const [slots, setSlots] = useState<(Concept | null)[]>(() => GENERATION_DIRECTIONS.map((_, index) => privateConcept(initialConcepts.find((concept) => concept.idx === index))));
-  const [outputMode, setOutputMode] = useState<OutputMode>("on_body");
   const [review, setReview] = useState<ReviewRequest | null>(null);
   const [pending, setPending] = useState<number | null>(null);
   const [errors, setErrors] = useState<(string | null)[]>([null, null, null]);
   const [messages, setMessages] = useState<(string | null)[]>([null, null, null]);
   const [revisions, setRevisions] = useState([0, 0, 0]);
   const lock = useRef(false);
-  const sharedPlan = buildGenerationPlan(brief, 0, outputMode);
+  const sharedPlan = buildGenerationPlan(brief, 0);
 
   function openReview(index: number) {
     if (lock.current || review) return;
-    setReview({ index, outputMode, replacement: !!slots[index]?.image_url });
+    setReview({ index, replacement: !!slots[index]?.image_url });
   }
 
   // Only the review's explicit confirmation can reach this function.
@@ -40,7 +39,7 @@ export default function ConceptsGrid({ briefId, initialConcepts, brief, previewO
     if (!review) return;
     if (lock.current) return;
     lock.current = true;
-    const { index, outputMode: requestedMode } = review;
+    const { index } = review;
     setReview(null);
     setErrors((current) => current.map((error, slot) => slot === index ? null : error));
     setMessages((current) => current.map((message, slot) => slot === index ? null : message));
@@ -56,7 +55,7 @@ export default function ConceptsGrid({ briefId, initialConcepts, brief, previewO
         credentials: "same-origin",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brief_id: briefId, idx: index, output_mode: requestedMode }),
+        body: JSON.stringify({ brief_id: briefId, idx: index, output_mode: "on_body" }),
       });
       if (!response.ok) throw new Error(generationError(response.status));
       const payload = await response.json();
@@ -79,31 +78,17 @@ export default function ConceptsGrid({ briefId, initialConcepts, brief, previewO
     <>
       <section className="card mt-8" aria-labelledby="generation-plan-title">
         <h2 id="generation-plan-title" className="text-xl font-medium">Plan your next image</h2>
-        <p className="mt-2 text-sm text-ink-muted">Preview the intent, then review one request at a time. Opening this page, choosing a format or reviewing a direction does not generate an image or use an allowance.</p>
-        <fieldset className="mt-5" disabled={pending !== null || review !== null} aria-describedby="output-mode-help">
-          <legend className="text-sm font-medium">Output format for your next request</legend>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {OUTPUT_MODES.map((mode) => (
-              <label key={mode.id} className={`chip flex items-start gap-3 ${outputMode === mode.id ? "chip-active" : ""}`}>
-                <input
-                  type="radio"
-                  name="generation-output-mode"
-                  value={mode.id}
-                  checked={outputMode === mode.id}
-                  onChange={() => setOutputMode(mode.id)}
-                  className="mt-1 h-4 w-4 shrink-0 accent-accent"
-                  aria-describedby={`output-mode-${mode.id}-description`}
-                  data-testid={`radio-output-${mode.id}`}
-                />
-                <span>
-                  <span className="block font-medium">{mode.label}</span>
-                  <span id={`output-mode-${mode.id}-description`} className="mt-1 block text-xs text-ink-muted">{mode.description}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-          <p id="output-mode-help" className="mt-3 text-xs text-ink-muted">On-body uses an imagined adult, not a photo of you or proof of fit. Flat artwork shows the design without a body. Changing this selection never changes the labels or format of saved images.</p>
-        </fieldset>
+        <p className="mt-2 text-sm text-ink-muted">Preview the intent, then review one request at a time. Opening this page or reviewing a direction does not generate an image or use an allowance.</p>
+        <div className="mt-5 rounded-xl border border-ink-ring bg-ink-edge p-4" data-testid="fixed-output-panel">
+          <p className="text-sm font-medium">New images: {sharedPlan.outputLabel} only</p>
+          <dl className="mt-3">
+            <dt className="text-sm text-ink-muted">Selected body placement from your saved brief</dt>
+            <dd className="mt-1 whitespace-pre-wrap break-words text-lg font-medium text-accent-soft" data-testid="selected-body-placement">{brief.placement || "Placement not recorded"}</dd>
+          </dl>
+          <p className="mt-3 text-sm text-ink-muted">All three directions request this same body area, including any specified side and orientation. To change placement, edit and save your brief.</p>
+          <p className="mt-3 text-sm text-ink-muted" data-testid="gallery-presentation-target">Gallery-style presentation: realistic skin, detailed tattoo rendering, soft studio lighting and a dark background. Your story, tattoo style and palette remain your own.</p>
+          <p className="mt-3 text-xs text-ink-muted">An anonymous fictional adult or a safe anatomical body form is used, not a photo of you or proof of fit. Existing saved images keep their original format and labels.</p>
+        </div>
         <div className="mt-5 border-t border-ink-ring pt-5" data-testid="planned-image-settings">
           <GenerationIntent brief={brief} styleNote={sharedPlan.styleNote} placementNote={sharedPlan.placementNote} />
         </div>

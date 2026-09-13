@@ -1,8 +1,15 @@
-import { GENERATION_DIRECTIONS, OUTPUT_MODES, type OutputMode } from "@/lib/generation-plan";
+import { GENERATION_DIRECTIONS } from "@/lib/generation-plan";
+
+// Historical formats describe saved images, not choices for new generation.
+export type SavedOutputMode = "on_body" | "artwork";
+const SAVED_OUTPUT_LABELS: Record<SavedOutputMode, string> = {
+  on_body: "On-body mockup",
+  artwork: "Artwork only",
+};
 
 export type ConceptMeta = {
   variant?: string;
-  output_mode?: OutputMode;
+  output_mode?: SavedOutputMode;
   prompt_version?: string;
   model?: string;
   size?: string;
@@ -51,7 +58,7 @@ export function privateConcept(value: unknown): Concept | null {
 
 export function savedOutputLabel(meta: ConceptMeta | null): string {
   const safe = sanitiseConceptMeta(meta);
-  return OUTPUT_MODES.find((mode) => mode.id === safe.output_mode)?.label ?? "Legacy image · output format not recorded";
+  return safe.output_mode ? SAVED_OUTPUT_LABELS[safe.output_mode] : "Legacy image · output format not recorded";
 }
 
 export function savedDirectionLabel(meta: ConceptMeta | null): string {
