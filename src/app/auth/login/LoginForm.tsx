@@ -61,8 +61,8 @@ export default function LoginForm() {
     <main className="mx-auto max-w-md px-6 py-12">
       <Link href="/" className="btn-ghost">← InkStory</Link>
       <span className="pill mt-8">Account pilot</span>
-      <h1 className="mt-4 font-display text-3xl">{stage === "code" ? "Check your email" : "Sign in to InkStory"}</h1>
-      <p className="mt-3 text-sm text-ink-muted">Account storage is separate from the local demo. Signing in does not grant pilot generation access: images are invitation-only and quota-limited.</p>
+      <h1 className="mt-4 font-display text-3xl">{stage === "code" ? "Check your email" : "Sign up or sign in"}</h1>
+      <p className="mt-3 text-sm text-ink-muted">Verify your email to check your one lifetime free generation attempt, available when public generation is enabled and service capacity remains. One attempt across this account, not per brief or direction. Reserved attempts count even if they fail or expire; no retries, with manual review on Facebook only. Active allowlisted accounts keep their separate rolling allowance. Account storage is separate from the local demo.</p>
       {stage === "code" && <p role="status" className="mt-4 break-words text-sm">Sign-in email requested for {email}. Enter its one-time code here, or follow the sign-in link if provided. Check spam if it has not arrived.</p>}
       <form onSubmit={(event) => void submit(event)} className="mt-6 space-y-4">
         <fieldset disabled={busy} className="space-y-4">

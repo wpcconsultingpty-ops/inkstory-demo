@@ -4,6 +4,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { accountConfigured } from "@/components/pilot-client";
 import AccountUnavailable from "@/components/AccountUnavailable";
 import { PilotLinks } from "@/components/PilotLinks";
+import GenerationAllowance from "@/components/GenerationAllowance";
+import { readGenerationEntitlement } from "@/lib/pilot-server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,7 @@ export default async function Dashboard() {
     data: { user }
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login?next=/dashboard");
+  const entitlement = await readGenerationEntitlement(supabase);
 
   const { data: briefs, error } = await supabase
     .from("briefs")
@@ -37,7 +40,8 @@ export default async function Dashboard() {
         </div>
         <Link href="/brief" className="btn-primary">Start a new brief</Link>
       </div>
-      <p className="mt-4 text-sm text-ink-muted">Account pilot · Saving a brief does not grant image generation access. Image requests are invitation-only and quota-limited. Local demo briefs are separate and are not synced here.</p>
+      <p className="mt-4 text-sm text-ink-muted">Your account brief does not use an image attempt until a generation request is reserved. Local demo briefs are separate and are not synced here.</p>
+      <GenerationAllowance entitlement={entitlement} />
 
       <div className="mt-8 space-y-3">
         {error && <div role="alert" className="card text-sm text-red-200">Your briefs could not be loaded. Refresh or try again later; this does not mean they have been deleted.</div>}

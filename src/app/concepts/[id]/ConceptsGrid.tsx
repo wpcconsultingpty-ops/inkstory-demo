@@ -11,15 +11,19 @@ import ConceptImage from "./ConceptImage";
 import GenerationReview, { type ReviewRequest } from "./GenerationReview";
 import GenerationIntent from "./GenerationIntent";
 import { privateConcept, savedDirectionLabel, savedOutputLabel, type Concept } from "./GenerationMetadata";
+import { refreshGenerationEntitlement, type GenerationEntitlement } from "@/lib/generation-entitlement";
+import GenerationAllowance from "@/components/GenerationAllowance";
 
 export type { Concept } from "./GenerationMetadata";
 
-export default function ConceptsGrid({ briefId, initialConcepts, brief, previewOnly = false }: {
+export default function ConceptsGrid({ briefId, initialConcepts, brief, previewOnly = false, initialEntitlement = null }: {
   briefId: string;
   initialConcepts: Concept[];
   brief: BriefDraft;
   previewOnly?: boolean;
+  initialEntitlement?: GenerationEntitlement | null;
 }) {
+  const [entitlement, setEntitlement] = useState(initialEntitlement);
   const [slots, setSlots] = useState<(Concept | null)[]>(() => GENERATION_DIRECTIONS.map((_, index) => privateConcept(initialConcepts.find((concept) => concept.idx === index))));
   const [review, setReview] = useState<ReviewRequest | null>(null);
   const [pending, setPending] = useState<number | null>(null);
@@ -38,6 +42,7 @@ export default function ConceptsGrid({ briefId, initialConcepts, brief, previewO
   async function confirmRequest() {
     if (!review) return;
     if (lock.current) return;
+    if (!previewOnly && !entitlement?.can_generate) return;
     lock.current = true;
     const { index } = review;
     setReview(null);
@@ -49,6 +54,8 @@ export default function ConceptsGrid({ briefId, initialConcepts, brief, previewO
       return;
     }
     setPending(index);
+    // Fail closed while the result is uncertain; the server remains authoritative.
+    setEntitlement(null);
     try {
       const response = await fetch("/api/generate-one", {
         method: "POST",
@@ -61,21 +68,23 @@ export default function ConceptsGrid({ briefId, initialConcepts, brief, previewO
       const payload = await response.json();
       const concept = privateConcept(payload?.concept);
       if (!concept || concept.idx !== index || !concept.image_url) {
-        throw new Error("The response did not confirm a saved image. Refresh to check before trying again; the request may still count towards your allowance.");
+        throw new Error("The response did not confirm a saved image. Refresh to check for a saved result. Reserved attempts count even without a result; failures require manual review, not a retry.");
       }
       setSlots((current) => current.map((slot, slotIndex) => slotIndex === index ? concept : slot));
       setRevisions((current) => current.map((value, slot) => slot === index ? value + 1 : value));
       setMessages((current) => current.map((message, slot) => slot === index ? "New AI concept mockup saved. Review it with your artist." : message));
     } catch (cause) {
-      const message = cause instanceof Error && cause.name === "Error" ? cause.message : "The generation request could not be confirmed. Check your connection and refresh for a saved result before retrying. A request may still count towards your allowance.";
+      const message = cause instanceof Error && cause.name === "Error" ? cause.message : "The generation request could not be confirmed. Refresh to check for a saved result. A reserved lifetime attempt remains used; contact InkStory for manual review, not a retry.";
       setErrors((current) => current.map((error, slot) => slot === index ? message : error));
     } finally {
+      setEntitlement(await refreshGenerationEntitlement());
       setPending(null);
       lock.current = false;
     }
   }
   return (
     <>
+      {!previewOnly && <GenerationAllowance entitlement={entitlement} />}
       <section className="card mt-8" aria-labelledby="generation-plan-title">
         <h2 id="generation-plan-title" className="text-xl font-medium">Plan your next image</h2>
         <p className="mt-2 text-sm text-ink-muted">Preview the intent, then review one request at a time. Opening this page or reviewing a direction does not generate an image or use an allowance.</p>
@@ -128,7 +137,7 @@ export default function ConceptsGrid({ briefId, initialConcepts, brief, previewO
         })}
       </div>
       <p className="mt-5 text-sm text-ink-muted">AI concept mockups are discussion references, not finished tattoos or stencils. Your artist must simplify, adapt and approve the design for real skin. No result is promised to match the editorial gallery.</p>
-      {review && <GenerationReview brief={brief} request={review} previewOnly={previewOnly} onCancel={() => setReview(null)} onConfirm={() => void confirmRequest()} />}
+      {review && <GenerationReview brief={brief} request={review} previewOnly={previewOnly} entitlement={entitlement} onCancel={() => setReview(null)} onConfirm={() => void confirmRequest()} />}
       {!previewOnly && <ExportBrief brief={brief} mode="account" labels={slots.flatMap((concept, index) => concept?.image_url ? [`Direction ${index + 1}: ${savedDirectionLabel(concept.meta)} · ${savedOutputLabel(concept.meta)} (AI concept mockup; image not included)`] : [])} />}
     </>
   );

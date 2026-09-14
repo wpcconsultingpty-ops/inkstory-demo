@@ -4,7 +4,7 @@ import { EarlyAccessLink, PilotLinks } from "@/components/PilotLinks";
 
 export const metadata: Metadata = {
   title: "Pilot scope | InkStory",
-  description: "What is available in the InkStory planning preview, how invitation-only generation works, and what is not promised.",
+  description: "How InkStory's one lifetime free generation attempt works, shared service limits and manual review of failures.",
 };
 
 export default function PilotPage() {
@@ -21,10 +21,12 @@ export default function PilotPage() {
           <div className="mt-5 flex flex-wrap gap-3"><Link href="/demo/sample" className="btn-primary">Explore sample brief</Link><Link href="/demo/brief" className="btn-ghost">Write a local brief</Link></div>
         </section>
         <section>
-          <h2 className="font-display text-2xl">Account generation is invitation-only</h2>
-          <p className="mt-3 text-ink-muted">Signing in lets you use account brief storage when the service is available. It does not grant image generation access. Invited participants can request AI-assisted images only while generation is enabled and their allowance is available. Pilot controls can pause requests, and rolling 24-hour quotas can limit access.</p>
-          <p className="mt-3 text-ink-muted">Each image requires an explicit request. A reserved generation attempt can count towards the allowance even if it fails. If a request times out, check for a saved result before retrying. There is no promise of a particular generation time, number of successful results or continuous availability.</p>
+          <h2 className="font-display text-2xl">One lifetime free generation attempt</h2>
+          <p className="mt-3 text-ink-muted">When public generation is enabled, a verified email account without a revoked or expired membership can reserve one lifetime free generation attempt. This is one attempt across the account’s entire history: not one per brief, direction, day or device. Previous generation attempts and saved artwork count. Signing up, saving a brief and reviewing directions do not use it.</p>
+          <p className="mt-3 text-ink-muted">Each image requires explicit confirmation. Once a generation is reserved, the attempt is permanently used, including provider failures, save failures, timeouts, abandoned requests and expired reservations. There are no retries, refunds of attempts or automatic replacements. Refresh to check for a saved result, not to request again. Contact InkStory on Facebook for manual review of a failure; another attempt or successful result is not promised.</p>
+          <p className="mt-3 text-ink-muted">The existing active allowlisted owner allowance remains 10 attempts per rolling 24 hours, not a public entitlement. Expired or revoked memberships do not fall back to the public allowance. The shared service limit remains 12 attempts per rolling 24 hours across everyone, including failed attempts. Your account shows current allowance and availability; all limits are checked again at reservation. Generation can be paused, and no generation time or continuous availability is promised.</p>
           <p className="mt-3 text-ink-muted">Participants can download their own available pilot images. Generation and replacement may fail; existing images are not intentionally removed by starting a replacement request.</p>
+          <Link href="/auth/login?next=/brief" className="btn-primary mt-5">Sign up with email</Link>
         </section>
         <section>
           <h2 className="font-display text-2xl">No sales or payment collection</h2>

@@ -10,7 +10,7 @@ export default function Landing() {
         <nav aria-label="Main navigation" className="flex flex-wrap items-center gap-5 text-sm text-ink-muted">
           <Link className="py-3 text-accent-soft hover:text-white" href="/gallery" data-testid="link-home-gallery">Concept gallery</Link>
           <Link className="py-3 hover:text-white" href="/pilot">About the pilot</Link>
-          <Link className="py-3 hover:text-white" href="/auth/login">Account sign-in</Link>
+          <Link className="py-3 hover:text-white" href="/auth/login">Sign up / sign in</Link>
         </nav>
       </header>
 
@@ -19,8 +19,8 @@ export default function Landing() {
           <span className="pill">Early-access preview · Tattoo planning</span>
           <h1 className="mt-6 font-display text-4xl leading-[1.08] md:text-6xl">Your tattoo starts<br />with a <em className="not-italic text-accent">story</em>.</h1>
           <p className="mt-6 max-w-xl text-lg text-ink-muted">Make space for the meaning before the ink. Explore fixed concept inspiration, capture your ideas in a discussion brief, and take better questions to your tattoo artist.</p>
-          <div className="mt-8 flex flex-wrap gap-3"><EarlyAccessLink /><Link href="/demo/sample" className="btn-ghost">Explore sample brief</Link></div>
-          <p className="mt-5 max-w-xl text-sm text-ink-muted">A planning tool, not a tattoo design service. The local brief does not generate images or offer checkout. Account image generation is invitation-only and subject to pilot quotas.</p>
+          <div className="mt-8 flex flex-wrap gap-3"><Link href="/auth/login?next=/brief" className="btn-primary" data-testid="link-public-signup">Sign up to try one image</Link><Link href="/demo/sample" className="btn-ghost">Explore sample brief</Link></div>
+          <p className="mt-5 max-w-xl text-sm text-ink-muted">When public generation is enabled, a verified email account gets one lifetime free generation attempt, across all briefs and directions. Failed or expired attempts count; no retries. Shared service limits apply. A planning reference, not a finished tattoo design.</p>
         </div>
         <GalleryTeaser />
       </section>
@@ -51,9 +51,9 @@ export default function Landing() {
       <section className="mx-auto max-w-6xl px-6 pb-16" aria-labelledby="pilot-title">
         <div className="card grid gap-6 md:grid-cols-[1.5fr_1fr] md:items-center">
           <div>
-            <span className="pill">A small, invitation-only account pilot</span>
+            <span className="pill">One account. One lifetime free attempt.</span>
             <h2 id="pilot-title" className="mt-4 font-display text-3xl">Help shape what comes next.</h2>
-            <p className="mt-3 max-w-2xl text-sm text-ink-muted">We’re testing whether a structured brief and AI-assisted references make that first artist conversation more useful. There are no paid sales in this pilot. Generation can be paused and allowances are limited; creating an account does not guarantee access.</p>
+            <p className="mt-3 max-w-2xl text-sm text-ink-muted">Sign up, verify your email, save a brief and choose one direction. Confirming a request reserves your lifetime attempt, even if generation fails. Failures require manual review on Facebook, not a free retry. Generation can be paused or limited by the shared service allowance; check your account for current availability. Existing active allowlisted accounts keep their separate rolling allowance.</p>
           </div>
           <div className="flex flex-col items-start gap-4 md:items-end"><EarlyAccessLink /><Link href="/pilot" className="py-3 text-sm text-accent underline">Read the pilot scope</Link></div>
         </div>

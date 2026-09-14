@@ -6,11 +6,11 @@ export const metadata: Metadata = {
   title: isStaging ? "InkStory Staging — Test environment" : "InkStory — Tattoo planning, early-access preview",
   robots: isStaging ? { index: false, follow: false, nocache: true } : undefined,
   description:
-    "Explore a local tattoo discussion brief and abstract example layouts. A planning preview with invitation-only account generation, not a paid tattoo design service.",
+    "Explore a tattoo discussion brief and one lifetime free image attempt for verified email accounts when enabled. A planning reference, not a tattoo design service.",
   metadataBase: new URL(isStaging ? "https://inkstory-staging.vercel.app" : "https://inkstory-tattoo-planner.vercel.app"),
   openGraph: {
     title: "InkStory",
-    description: "Your tattoo starts with a story. Explore the local planning preview; account image generation is invitation-only.",
+    description: "Your tattoo starts with a story. Plan your brief and check your account's one lifetime free image attempt when public generation is enabled.",
     type: "website"
   }
 };
@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {isStaging && <div className="border-b border-ink-ring bg-ink-edge px-5 py-3 text-center text-sm text-accent-soft" role="note">
-          STAGING · Test environment · Image generation invitation-only · Payments disabled · Production is separate
+          STAGING · Test environment · Image generation subject to account & service limits · Payments disabled · Production is separate
         </div>}
         {children}
       </body>

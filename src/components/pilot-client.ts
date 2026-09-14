@@ -2,12 +2,12 @@ export function generationError(status: number): string {
   switch (status) {
     case 400: return "Check that all required brief fields are complete and within their limits. Edit your brief, save it, then try again.";
     case 401: return "Your session has expired or sign-in is required. Sign in again, then return to this brief.";
-    case 403: return "This account does not have pilot generation access, or this preview cannot make an authorised request. Ask about early access on Facebook; if already invited, try in a full browser tab. Your saved brief is unchanged.";
+    case 403: return "Generation needs a verified email account and enabled access. Revoked or expired memberships do not get a public allowance. Check your account status or ask on Facebook for manual review. Your saved brief is unchanged.";
     case 404: return "This brief is no longer available to your account. Return to your briefs and open it again.";
-    case 409: return "This direction may already be generating or its request has expired. Wait, then refresh to check for a saved result before retrying.";
-    case 429: return "The pilot image allowance has been reached. Wait for the rolling 24-hour allowance to become available, or ask on Facebook. Repeated retries will not increase the allowance.";
-    case 503: return "Pilot generation is paused or unavailable. Keep or export your brief and try again later. You can ask about availability on Facebook.";
-    default: return "We could not complete this generation request. Your saved brief remains available. Refresh to check for a result before trying again; a request may still count towards the pilot allowance.";
+    case 409: return "Your lifetime attempt may already be used, or a request may be in progress or expired. Refresh only to check for a saved result and account status. Reserved public attempts do not reset; failures require manual review on Facebook, not a retry.";
+    case 429: return "An account or shared rolling 24-hour service limit has been reached. Check your allowance status. A used public lifetime attempt never resets with the rolling window.";
+    case 503: return "Generation is paused or unavailable, or the image could not be saved. Keep or export your brief and check for a saved result. If a request was reserved, the attempt remains used. Contact InkStory on Facebook for manual review; do not retry a reserved public attempt.";
+    default: return "We could not complete this generation request. Your saved brief remains available. Refresh to check for a saved result. A reserved attempt counts even if it fails or expires; no public retries, manual review on Facebook only.";
   }
 }
 

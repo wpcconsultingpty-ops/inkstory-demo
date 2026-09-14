@@ -28,7 +28,7 @@ export default function PrivacyPage() {
         </section>
         <section>
           <h2 className="font-display text-2xl">AI generation in the account pilot</h2>
-          <p className="mt-3 text-ink-muted">When you explicitly request a pilot image, the saved story, placement, size, style, palette, elements and notes are used to create a prompt sent to OpenAI. Generation requires an invited account, an available allowance and enabled pilot services. Opening the public demo or a concept page does not itself request images.</p>
+          <p className="mt-3 text-ink-muted">When you explicitly request an image, the saved story, placement, size, style, palette, elements and notes are used to create a prompt sent to OpenAI. Generation requires a verified email account, an available allowance and enabled services. Public accounts have one lifetime attempt when enabled; reserved attempts count even if they fail. Opening the public demo or a concept page does not itself request images.</p>
           <p className="mt-3 text-ink-muted">OpenAI and Supabase process information under their own service arrangements and policies. Do not assume that content you submit is anonymous or immediately deleted. You can read the <a className="text-accent underline" href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noopener noreferrer">OpenAI privacy policy (new tab)</a> and <a className="text-accent underline" href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">Supabase privacy policy (new tab)</a>.</p>
         </section>
         <section>
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
         </section>
         <section>
           <h2 className="font-display text-2xl">Retention, removal and questions</h2>
-          <p className="mt-3 text-ink-muted">The pilot does not promise a fixed retention period or a guaranteed deletion timeline. There is no self-service account deletion flow here. Ask on Facebook about access to, correction of or removal of account data. Removal from the application may not immediately remove provider logs, backups or copies you have shared.</p>
+          <p className="mt-3 text-ink-muted">The pilot does not promise a fixed retention period or a guaranteed deletion timeline. An account-ID consumption record is retained independently of briefs and image history to enforce the lifetime attempt; it does not contain your story or email. There is no self-service account deletion flow here. Ask on Facebook about access to, correction of or removal of account data. Removal from the application may not immediately remove provider logs, backups or copies you have shared.</p>
           <p className="mt-3 text-ink-muted">For a privacy question, start with a general message and the nature of your request. Do not send sensitive story details or passwords through Facebook.</p>
           <div className="mt-5"><EarlyAccessLink /></div>
         </section>

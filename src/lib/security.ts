@@ -134,7 +134,7 @@ export async function readJsonObject(req: Request): Promise<Record<string, unkno
 
 export function requireGenerationEnabled(value: string | undefined): void {
   if (value !== "true") {
-    throw new RequestError(503, "Image generation is paused for the invite-only free pilot.");
+    throw new RequestError(503, "Image generation is paused.");
   }
 }
 

@@ -118,11 +118,11 @@ export default function BriefWizard({ initial, userEmail }: Props) {
           saveState === "saving" ? "Saving to your account…" :
           saveState === "error" ? "Save not confirmed. Your edits are still on this page." : "Saved to your account."}
       </p>
-      <p className="mt-2 text-sm text-ink-muted">Account briefs are stored with Supabase. Image generation sends your brief to OpenAI only when requested and available to your invited account. Avoid sensitive details. <Link href="/privacy" className="text-accent underline">Read about data handling</Link>.</p>
+      <p className="mt-2 text-sm text-ink-muted">Account briefs are stored with Supabase. Image generation sends your brief to OpenAI only when explicitly requested and available to your verified email account. Avoid sensitive details. <Link href="/privacy" className="text-accent underline">Read about data handling</Link>.</p>
       <form noValidate onSubmit={(event) => { event.preventDefault(); void submit(step === 4, step < 4); }}>
         <ValidationSummary errors={errors} />
         <BriefFields step={step} brief={brief} errors={errors} onChange={change} disabled={busy} />
-        {step === 4 && <p className="mt-4 text-sm text-ink-muted">Save and open a review of composition directions and output formats. No image is generated yet. Each image needs a separate confirmation on the next page; generation remains invitation-only and allowance-limited. You can save or export without image access.</p>}
+        {step === 4 && <p className="mt-4 text-sm text-ink-muted">Save and review the composition directions. No image is generated yet. Choose carefully: public accounts get one lifetime attempt across all briefs and directions when enabled. A reserved attempt counts even if it fails; no retries, manual review only. You can save or export without image access.</p>}
         {error && <div role="alert" className="mt-5 rounded-xl border border-red-400/40 p-4 text-sm text-red-200">
           <p>{error}</p>
           <div className="mt-3 flex flex-wrap gap-3">

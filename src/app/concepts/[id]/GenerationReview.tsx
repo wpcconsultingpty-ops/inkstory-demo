@@ -5,13 +5,15 @@ import { buildGenerationPlan } from "@/lib/generation-plan";
 import { BriefSummary } from "@/components/BriefFields";
 import GenerationDialog from "./GenerationDialog";
 import GenerationIntent from "./GenerationIntent";
+import { entitlementMessage, type GenerationEntitlement } from "@/lib/generation-entitlement";
 
 export type ReviewRequest = { index: number; replacement: boolean };
 
-export default function GenerationReview({ brief, request, previewOnly, onCancel, onConfirm }: {
+export default function GenerationReview({ brief, request, previewOnly, entitlement = null, onCancel, onConfirm }: {
   brief: BriefDraft;
   request: ReviewRequest;
   previewOnly: boolean;
+  entitlement?: GenerationEntitlement | null;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -43,14 +45,15 @@ export default function GenerationReview({ brief, request, previewOnly, onCancel
         </details>
         <div id="generation-review-disclosure" className="mt-6 space-y-3 border-t border-ink-ring pt-5 text-sm">
           <p>Your saved brief, including story, motifs and notes, is sent to OpenAI when you confirm. Do not include sensitive personal information.</p>
-          <p><strong className="font-medium text-accent-soft">One image request may use 1 allowance, even if it fails</strong> after generation is reserved. Access and allowance are checked when you confirm.</p>
+          <p><strong className="font-medium text-accent-soft">A reserved image request uses 1 allowance, even if it fails</strong> or expires. Public accounts get one lifetime attempt across all briefs and directions, not one per image slot. No retries or automatic replacements; failures require manual review on Facebook. Access and allowance are checked when you confirm.</p>
+          {!previewOnly && <p role="status" data-testid="review-allowance">{entitlementMessage(entitlement)}</p>}
           <p>{request.replacement ? "This replacement is a new composition, not a precise edit. Your existing image stays until a new image is saved successfully." : "Any later replacement is a new composition, not a precise edit. An existing image stays until its replacement is saved successfully."}</p>
           <p>High-quality requests may take several minutes. Keep this page open; there is no automatic retry.</p>
           <p>All directions request this same placement on a fictional adult or a safe anatomical body form, never standalone artwork. Check the result: placement instructions are not visual validation.</p>
           <p className="text-ink-muted">AI concept mockup only. An artist must review placement, scale, detail and tattooability. Results can vary and are not promised to match the editorial gallery.</p>
         </div>
         {previewOnly && <p className="mt-5 rounded-xl border border-accent/40 bg-accent/10 p-4 text-sm text-accent-soft">Isolated preview: confirmation will not send your brief, make a request or use an allowance.</p>}
-        <button type="button" className="btn-primary mt-6 w-full" onClick={onConfirm} data-testid="button-confirm-generation">
+        <button type="button" className="btn-primary mt-6 w-full" onClick={onConfirm} disabled={!previewOnly && !entitlement?.can_generate} data-testid="button-confirm-generation">
           {previewOnly ? "Confirm in isolated preview" : request.replacement ? "Confirm & request one replacement" : "Confirm & request one image"}
         </button>
       </div>

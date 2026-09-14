@@ -21,9 +21,9 @@ test("staging config rejects production and mismatched database references", () 
   }
 });
 
-test("staging banner stays accurate whether invitation-only generation is enabled or disabled", () => {
+test("staging banner stays accurate whether public generation is enabled or disabled", () => {
   const layout = readFileSync(resolve("src/app/layout.tsx"), "utf8");
-  assert.match(layout, /STAGING · Test environment · Image generation invitation-only · Payments disabled · Production is separate/);
+  assert.match(layout, /STAGING · Test environment · Image generation subject to account & service limits · Payments disabled · Production is separate/);
   assert.doesNotMatch(layout, /AI generation and payments disabled/);
   assert.match(layout, /isStaging && <div/);
   assert.doesNotMatch(layout, /["']use client["']/);

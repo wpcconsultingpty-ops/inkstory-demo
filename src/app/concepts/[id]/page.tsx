@@ -8,6 +8,7 @@ import { PilotLinks } from "@/components/PilotLinks";
 import { accountConfigured } from "@/components/pilot-client";
 import AccountUnavailable from "@/components/AccountUnavailable";
 import { privateConcept, type Concept } from "./GenerationMetadata";
+import { readGenerationEntitlement } from "@/lib/pilot-server";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Pilot concepts | InkStory", robots: { index: false, follow: false } };
@@ -34,16 +35,17 @@ export default async function ConceptsPage({ params }: { params: Promise<{ id: s
     if (concept && !canonical.has(concept.idx)) canonical.set(concept.idx, concept);
   }
   const privateConcepts = [...canonical.values()];
+  const entitlement = await readGenerationEntitlement(supabase);
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <Link href="/dashboard" className="py-3 text-sm text-ink-muted hover:text-white">← My briefs</Link>
         <Link href={`/brief?id=${encodeURIComponent(brief.id)}`} className="btn-ghost">Edit brief</Link>
       </header>
-      <span className="pill">Invitation-only account pilot</span>
+      <span className="pill">Account image generation</span>
       <h1 className="mt-4 font-display text-3xl">Your generation review</h1>
       <p className="mt-3 text-ink-muted">Explore composition directions before requesting an AI concept mockup. Nothing generates on opening this page. These are references for a conversation with your artist, not finished designs or tattoo stencils. You can download your own saved images without a purchase.</p>
-      <ConceptsGrid briefId={brief.id} initialConcepts={privateConcepts} brief={draft} />
+      <ConceptsGrid briefId={brief.id} initialConcepts={privateConcepts} brief={draft} initialEntitlement={entitlement} />
       <section className="card mt-8" aria-labelledby="brief-title">
         <h2 id="brief-title" className="mb-6 font-display text-2xl">Saved brief</h2>
         <BriefSummary brief={draft} />

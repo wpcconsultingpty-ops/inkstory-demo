@@ -73,7 +73,7 @@ export default function DemoConceptsView({ briefId }: { briefId: string }) {
       <ExportBrief brief={brief} mode="demo" labels={EXAMPLE_LAYOUTS.map((layout, index) => `Example layout ${index + 1}: ${layout.label} — ${layout.description}`)} preferredLayout={brief.preferred_layout !== null ? EXAMPLE_LAYOUTS[brief.preferred_layout].label : null} />
       <section className="mt-10 border-t border-ink-ring pt-8">
         <h2 className="font-display text-2xl">Interested in the account pilot?</h2>
-        <p className="mt-3 max-w-2xl text-sm text-ink-muted">AI-assisted image generation is invitation-only, subject to pilot availability and quotas. Signing in does not grant generation access. No payments are taken in this preview.</p>
+        <p className="mt-3 max-w-2xl text-sm text-ink-muted">When public generation is enabled, verified email accounts get one lifetime image attempt across all briefs and directions. Failed or expired reserved attempts count; no retries, manual review only. Shared service limits apply. This local demo makes no image requests and takes no payments.</p>
         <div className="mt-5"><EarlyAccessLink /></div>
       </section>
       <PilotLinks />
